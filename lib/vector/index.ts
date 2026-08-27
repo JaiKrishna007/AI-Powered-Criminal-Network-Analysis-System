@@ -57,13 +57,13 @@ export class VectorStore {
   /**
    * Search vector index with built-in authorization scope, case filter, and classification filter.
    */
-  public searchCandidates(
+  public async searchCandidates(
     queryEmbedding: number[],
     scope: AuthScopeAdapter,
     caseIdFilter?: string,
     classificationFilter?: string,
     topK: number = 10
-  ): Array<{ record: InternalVectorRecord; score: number }> | Promise<Array<{ record: InternalVectorRecord; score: number }>> {
+  ): Promise<Array<{ record: InternalVectorRecord; score: number }>> {
     const candidates: Array<{ record: InternalVectorRecord; score: number }> = [];
 
     for (const record of this.records.values()) {
@@ -148,7 +148,42 @@ export class QdrantVectorStore extends VectorStore {
     return this.vectorDimension;
   }
 
+  /**
+   * Validates or creates Qdrant collection with matching embedding dimension.
+   */
+  public async createOrValidateCollection(): Promise<void> {
+    const endpoint = `${this.qdrantUrl}/collections/${this.collectionName}`;
+    try {
+      const getRes = await fetch(endpoint);
+      if (getRes.ok) return;
+
+      const createRes = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vectors: {
+            size: this.vectorDimension,
+            distance: 'Cosine',
+          },
+        }),
+      });
+
+      if (!createRes.ok) {
+        throw new Error(`Failed to create Qdrant collection ${this.collectionName}: HTTP ${createRes.status}`);
+      }
+    } catch (err: any) {
+      throw new Error(`[QdrantVectorStore] Mandatory collection setup failed: ${err.message}`);
+    }
+  }
+
   public override async addRecord(record: InternalVectorRecord): Promise<void> {
+    // Dimension match validation (Contract Section 9)
+    if (record.embedding.length !== this.vectorDimension) {
+      throw new Error(
+        `[QdrantVectorStore] Vector dimension mismatch: record dimension (${record.embedding.length}) does not match Qdrant collection dimension (${this.vectorDimension}).`
+      );
+    }
+
     this.records.set(record.vector_id, record);
     const endpoint = `${this.qdrantUrl}/collections/${this.collectionName}/points`;
 

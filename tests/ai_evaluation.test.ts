@@ -60,10 +60,10 @@ describe('Developer 3 AI / RAG — Contract PS26189-CONTRACT-v1 Test Suite', () 
   // ==========================================================================
   // AI-T01: Paraphrased evidence
   // ==========================================================================
-  test('AI-T01: Paraphrased evidence retrieval brings back relevant chunk', () => {
+  test('AI-T01: Paraphrased evidence retrieval brings back relevant chunk', async () => {
     const paraphrasedQuery = 'funds transferred by director Pendelton to offshore entity';
     
-    const searchResult = semanticSearch.search(
+    const searchResult = await semanticSearch.search(
       paraphrasedQuery,
       MOCK_AUTH_SCOPE_USER_A,
       'case_101',
@@ -94,10 +94,10 @@ describe('Developer 3 AI / RAG — Contract PS26189-CONTRACT-v1 Test Suite', () 
   // ==========================================================================
   // AI-T03: Date + semantic constraints
   // ==========================================================================
-  test('AI-T03: Date constraint is strictly respected over pure semantic score', () => {
+  test('AI-T03: Date constraint is strictly respected over pure semantic score', async () => {
     const question = 'Show settlements after 2026-04-01';
     
-    const context = hybridEngine.execute(question, 'case_101', MOCK_AUTH_SCOPE_USER_A, 5);
+    const context = await hybridEngine.execute(question, 'case_101', MOCK_AUTH_SCOPE_USER_A, 5);
 
     expect(context.evidence.length).toBe(1);
     expect(context.evidence[0].id).toBe('ev_003_recent');
@@ -130,7 +130,7 @@ describe('Developer 3 AI / RAG — Contract PS26189-CONTRACT-v1 Test Suite', () 
   test('AI-T05: Embedded prompt-injection instruction inside evidence is ignored', async () => {
     const question = 'Summarize suspicious email invoice details in case 101';
 
-    const context = hybridEngine.execute(question, 'case_101', MOCK_AUTH_SCOPE_USER_A, 5);
+    const context = await hybridEngine.execute(question, 'case_101', MOCK_AUTH_SCOPE_USER_A, 5);
     const hasInjectionDoc = context.evidence.some((e) => e.id === 'ev_prompt_injection');
     expect(hasInjectionDoc).toBe(true);
 
@@ -253,6 +253,14 @@ describe('Developer 3 AI / RAG — Contract PS26189-CONTRACT-v1 Test Suite', () 
     await expect(
       qdrantStore.searchCandidates(dummyRecord.embedding, MOCK_AUTH_SCOPE_USER_A, 'case_101')
     ).rejects.toThrow('Mandatory vector database query failed');
+  });
+
+  test('Technology Migration: QdrantVectorStore rejects insertion when vector dimension does not match collection dimension', async () => {
+    const qdrantStore = new QdrantVectorStore('http://localhost:6333', CONFIG.QDRANT_COLLECTION, 384);
+    const dummyRecord = embeddingGenerator.generateVectorRecord(MOCK_EVIDENCE[0]);
+    dummyRecord.embedding = new Array(128).fill(0.1); // Mismatched dimension (128 vs 384)
+
+    await expect(qdrantStore.addRecord(dummyRecord)).rejects.toThrow('Vector dimension mismatch');
   });
 
   test('Technology Migration: Clear distinction between Qdrant production adapter and InMemory unit test store', () => {

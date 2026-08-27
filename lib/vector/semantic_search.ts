@@ -14,26 +14,23 @@ export class SemanticSearchEngine {
   /**
    * Performs scope-enforced vector semantic retrieval.
    */
-  public search(
+  public async search(
     query: string,
     scope: AuthScopeAdapter,
     caseId?: string,
     classificationFilter?: string,
     topK: number = 5,
     minScoreThreshold: number = 0.05
-  ): SearchV1Adapter {
+  ): Promise<SearchV1Adapter> {
     const queryEmbedding = this.embeddingGenerator.generateEmbedding(query);
     
-    const rawCandidates = this.vectorStore.searchCandidates(
+    const candidates = await this.vectorStore.searchCandidates(
       queryEmbedding,
       scope,
       caseId,
       classificationFilter,
       topK
     );
-
-    // Support both synchronous (InMemoryVectorStore) and async promise returns if needed
-    const candidates = Array.isArray(rawCandidates) ? rawCandidates : [];
 
     // Filter candidates below relevance score threshold
     const filteredCandidates = candidates.filter(({ score }) => score >= minScoreThreshold);

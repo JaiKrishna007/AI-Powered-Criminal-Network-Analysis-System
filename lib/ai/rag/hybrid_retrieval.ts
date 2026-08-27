@@ -25,7 +25,7 @@ export class HybridRetrievalEngine {
    * Complete Hybrid Retrieval Pipeline:
    * question -> intent -> vector candidates -> exact filters -> graph/context lookup -> deduplicate -> rank -> top-k -> evidence context
    */
-  public execute(question: string, caseId: string, scope: AuthScopeAdapter, topK: number = 5): GroundedContext {
+  public async execute(question: string, caseId: string, scope: AuthScopeAdapter, topK: number = 5): Promise<GroundedContext> {
     // 1. Intent Classification & Plan Generation
     const plan: IntentQueryPlan = this.intentPlanner.planQuery(question, caseId);
 
@@ -38,7 +38,7 @@ export class HybridRetrievalEngine {
     for (const op of plan.operations) {
       switch (op.tool) {
         case 'search_evidence': {
-          const searchRes = this.toolExecutor.search_evidence(question, scope, caseId, topK * 2);
+          const searchRes = await this.toolExecutor.search_evidence(question, scope, caseId, topK * 2);
           for (const item of searchRes.results) {
             const evId = item.vector_id.replace('vec_', '');
             vectorScores.set(evId, item.relevance_score);

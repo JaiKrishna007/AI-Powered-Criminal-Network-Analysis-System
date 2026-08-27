@@ -37,7 +37,7 @@ export class CopilotOrchestrator {
     }
 
     // 2. Intent Classification, Allowlisted Tool Execution, & Hybrid Retrieval
-    const context = this.hybridRetrievalEngine.execute(question, caseId, scope);
+    const context = await this.hybridRetrievalEngine.execute(question, caseId, scope);
 
     // 3. Early Check: If zero evidence/relationships retrieved within scope
     if (context.evidence.length === 0 && context.relationships.length === 0 && context.entities.length === 0) {

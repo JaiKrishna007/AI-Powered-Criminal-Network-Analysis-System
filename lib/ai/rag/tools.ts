@@ -41,8 +41,8 @@ export class AllowlistedToolExecutor {
   /**
    * Tool: search_evidence
    */
-  public search_evidence(query: string, scope: AuthScopeAdapter, caseId?: string, topK: number = 5) {
-    return this.semanticSearchEngine.search(query, scope, caseId, undefined, topK);
+  public async search_evidence(query: string, scope: AuthScopeAdapter, caseId?: string, topK: number = 5) {
+    return await this.semanticSearchEngine.search(query, scope, caseId, undefined, topK);
   }
 
   /**

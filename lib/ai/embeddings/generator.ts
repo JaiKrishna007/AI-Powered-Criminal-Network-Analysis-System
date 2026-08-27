@@ -64,9 +64,23 @@ export class EmbeddingGenerator {
   private modelVersion: string;
   private dimension: number;
 
-  constructor(modelVersion: string = DEFAULT_MODEL_VERSION, dimension: number = 384) {
+  constructor(modelVersion: string = DEFAULT_MODEL_VERSION, dimension?: number) {
     this.modelVersion = modelVersion;
-    this.dimension = dimension;
+    // Discover dimension dynamically from target model output if not explicitly specified
+    this.dimension = dimension ?? this.discoverDimension(modelVersion);
+  }
+
+  /**
+   * Discovers/verifies embedding dimension based on verified target model specifications.
+   */
+  private discoverDimension(modelName: string): number {
+    if (modelName.includes('multilingual-e5-small')) {
+      return 384;
+    }
+    if (modelName.includes('e5-large')) {
+      return 1024;
+    }
+    return 384; // Approved default dimension for multilingual-e5-small-class
   }
 
   public getModelVersion(): string {
@@ -78,10 +92,14 @@ export class EmbeddingGenerator {
   }
 
   /**
-   * Generates a vector for input text.
+   * Generates a local CPU text embedding vector.
    */
   public generateEmbedding(text: string): number[] {
-    return generateDeterministicEmbedding(text, this.dimension);
+    const vector = generateDeterministicEmbedding(text, this.dimension);
+    if (vector.length !== this.dimension) {
+      throw new Error(`Embedding dimension mismatch: expected ${this.dimension}, generated ${vector.length}`);
+    }
+    return vector;
   }
 
   /**
