@@ -13,9 +13,7 @@ import {
   ChevronDown, 
   ShieldAlert, 
   UserCheck, 
-  RefreshCw,
-  Clock,
-  Lock
+  RefreshCw 
 } from 'lucide-react';
 import { Case } from '@/lib/client-contracts/contracts';
 
@@ -44,20 +42,7 @@ export default function CaseShell({
   const [activeCase, setActiveCase] = useState<Case | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCaseSelector, setShowCaseSelector] = useState(false);
-  const [utcClock, setUtcClock] = useState('');
 
-  // Live UTC Clock (Overhaul 1)
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setUtcClock(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch cases
   useEffect(() => {
     async function fetchCases() {
       try {
@@ -102,60 +87,55 @@ export default function CaseShell({
     }
   };
 
-  // Simulated 403 Block check for verification (FE-T07)
-  const isSimulated403 = searchQuery.trim() === '403';
-
   return (
-    <div className="flex h-screen bg-[#F8FAFC] text-slate-800 font-sans antialiased">
+    <div className="flex h-screen bg-zinc-950 text-zinc-100 font-sans">
       {/* Sidebar Navigation */}
-      <aside className="w-64 border-r border-slate-300 bg-slate-100 flex flex-col z-20 shrink-0">
-        
-        {/* Brand Header */}
-        <div className="p-5 border-b border-slate-300 flex flex-col gap-2 bg-slate-100">
+      <aside className="w-64 border-r border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md flex flex-col z-20">
+        {/* Brand Logo & Security Header */}
+        <div className="p-5 border-b border-zinc-800/80 flex flex-col gap-2 bg-zinc-900/60">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-[#2563eb] flex items-center justify-center font-bold text-base text-white">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-lg text-white shadow-md shadow-indigo-600/30">
               AG
             </div>
             <div>
-              <h1 className="font-bold text-sm tracking-wide text-slate-900 uppercase">
-                Antigravity
+              <h1 className="font-bold text-sm tracking-wide bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+                ANTIGRAVITY
               </h1>
-              <p className="text-[9px] text-slate-500 font-semibold tracking-widest uppercase">
-                TECHNICAL FORENSICS
+              <p className="text-[10px] text-zinc-500 font-medium tracking-widest uppercase">
+                CRIMINAL INTELLIGENCE
               </p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-sm bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-bold mt-2 uppercase tracking-wider font-mono-tech">
-            <ShieldAlert size={11} className="shrink-0 text-amber-600" />
-            <span>CASE_RESTRICTED CLASSIFICATION</span>
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-red-950/30 border border-red-900/30 text-red-400 text-[10px] font-bold mt-2 uppercase tracking-wider">
+            <ShieldAlert size={12} className="shrink-0 animate-pulse" />
+            <span>Classified: Restricted</span>
           </div>
         </div>
 
         {/* Case Switcher */}
-        <div className="p-4 border-b border-slate-200 relative bg-slate-100">
-          <label className="text-[9px] font-bold text-slate-500 tracking-wider uppercase mb-1 block">
-            Workspace Selector
+        <div className="p-4 border-b border-zinc-800/50 relative">
+          <label className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase mb-1 block">
+            Active Case Workspace
           </label>
           {loading ? (
-            <div className="h-9 rounded-sm bg-slate-200/50 animate-pulse flex items-center px-3">
-              <RefreshCw size={12} className="animate-spin text-slate-500 mr-2" />
-              <span className="text-[11px] text-slate-500">Retrieving Cases...</span>
+            <div className="h-10 rounded bg-zinc-800/40 animate-pulse flex items-center px-3">
+              <RefreshCw size={14} className="animate-spin text-zinc-500 mr-2" />
+              <span className="text-xs text-zinc-500">Loading cases...</span>
             </div>
           ) : (
             <div>
               <button
                 onClick={() => setShowCaseSelector(!showCaseSelector)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded bg-white border border-slate-350 hover:border-slate-400 text-left text-xs font-semibold text-slate-700 transition"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition text-left text-xs font-semibold text-zinc-200"
               >
                 <span className="truncate">
                   {activeCase ? activeCase.title : 'Select a Case'}
                 </span>
-                <ChevronDown size={14} className="text-slate-500 ml-1 shrink-0" />
+                <ChevronDown size={14} className="text-zinc-500 ml-1" />
               </button>
 
               {showCaseSelector && (
-                <div className="absolute top-[64px] left-4 right-4 bg-white border border-slate-300 rounded shadow-lg overflow-hidden z-30">
+                <div className="absolute top-[68px] left-4 right-4 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden z-30">
                   {cases.map((c) => (
                     <button
                       key={c.id}
@@ -163,13 +143,13 @@ export default function CaseShell({
                         setActiveCaseId(c.id);
                         setShowCaseSelector(false);
                       }}
-                      className={`w-full text-left px-4 py-2.5 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-b-0 transition flex flex-col gap-0.5 ${
-                        activeCaseId === c.id ? 'bg-slate-100 border-l-2 border-l-blue-600 font-bold' : ''
+                      className={`w-full text-left px-4 py-3 text-xs hover:bg-zinc-800/60 border-b border-zinc-800 last:border-b-0 transition flex flex-col gap-1 ${
+                        activeCaseId === c.id ? 'bg-zinc-800/40 border-l-2 border-l-indigo-500' : ''
                       }`}
                     >
-                      <span className="text-slate-800">{c.title}</span>
-                      <span className="text-[8px] text-slate-500 font-mono-tech uppercase">
-                        {c.classification}
+                      <span className="font-semibold text-zinc-200">{c.title}</span>
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                        Classification: {c.classification.replace('_', ' ')}
                       </span>
                     </button>
                   ))}
@@ -179,8 +159,8 @@ export default function CaseShell({
           )}
         </div>
 
-        {/* Tab Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {/* Tab Selection */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -188,104 +168,70 @@ export default function CaseShell({
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded text-xs font-medium transition ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition ${
                   isActive
-                    ? 'bg-white border border-slate-300 text-blue-600 font-bold shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-200/50 hover:text-slate-900'
+                    ? 'bg-indigo-600/15 border border-indigo-500/20 text-indigo-400 font-semibold'
+                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <Icon size={14} className={isActive ? 'text-blue-600' : 'text-slate-500'} />
+                <Icon size={16} className={isActive ? 'text-indigo-400' : 'text-zinc-500'} />
                 <span>{item.label}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* Investigator RBAC & Identity Status */}
-        <div className="p-4 border-t border-slate-300 bg-slate-100 flex items-center justify-between text-xs shrink-0">
+        {/* Investigator RBAC Status Header */}
+        <div className="p-4 border-t border-zinc-800/80 bg-zinc-900/30 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-slate-300 border border-slate-400 flex items-center justify-center font-bold text-slate-700 text-xs">
+            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-300">
               A
             </div>
             <div>
-              <p className="font-semibold text-slate-800">Arash</p>
-              <p className="text-[9px] text-slate-500 font-medium">Investigator</p>
+              <p className="font-semibold text-zinc-200">Arash</p>
+              <p className="text-[10px] text-zinc-500 font-medium">Investigator</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-green-700 text-[9px] font-bold bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-sm uppercase font-mono-tech">
-            <UserCheck size={9} />
-            <span>Auth</span>
+          <div className="flex items-center gap-1 text-green-500 text-[10px] font-bold bg-green-950/20 border border-green-900/30 px-2 py-0.5 rounded uppercase">
+            <UserCheck size={10} />
+            <span>Authorized</span>
           </div>
         </div>
       </aside>
 
       {/* Main Panel Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Top Header Panel (Grid Dividers - Overhaul 1) */}
-        <header className="h-14 border-b border-slate-300 bg-white flex items-center justify-between px-6 z-10 shrink-0">
-          {/* Ask/Search query command bar */}
-          <form onSubmit={handleSearchSubmit} className="relative w-80">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        {/* Top Header Panel */}
+        <header className="h-16 border-b border-zinc-800/80 bg-zinc-900/20 backdrop-blur-md flex items-center justify-between px-6 z-10">
+          {/* Ask/Search query bar */}
+          <form onSubmit={handleSearchSubmit} className="relative w-96 max-w-lg">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search or Ask... (Cmd+K)"
+              placeholder="Ask / Search: e.g. Rohan Mehta or TXN-8819..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-4 py-1.5 text-xs font-medium technical-input focus:outline-none placeholder-slate-400"
+              className="w-full pl-9 pr-4 py-2 rounded-lg text-xs bg-zinc-900/50 border border-zinc-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-100 transition"
             />
           </form>
 
-          {/* Live UTC Clock & Case metadata */}
-          <div className="flex items-center gap-4 text-xs font-semibold">
-            {/* Live UTC Clock (Technical - Overhaul 1) */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-mono-tech">
-              <Clock size={11} className="text-slate-500" />
-              <span>{utcClock}</span>
-            </div>
-
+          {/* Classification Banner */}
+          <div className="flex items-center gap-4 text-xs font-semibold text-zinc-400">
             {activeCase && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-mono-tech text-slate-600">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span>
-                <span>DB: {activeCase.id}</span>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                <span>Active Database: {activeCase.id}</span>
               </div>
             )}
-            
-            <div className="px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-[9px] tracking-wide uppercase font-bold text-slate-600 font-mono-tech">
-              SCOPE: INVESTIGATOR
+            <div className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[10px] tracking-wider uppercase font-bold text-indigo-400">
+              RBAC Scope: INVESTIGATOR
             </div>
           </div>
         </header>
 
-        {/* Content Shell (with Permission Denial Fallback) */}
+        {/* Content Shell */}
         <main className="flex-1 overflow-hidden relative">
-          {isSimulated403 ? (
-            /* HTTP 403 Forbidden Error Banner (FE-T07) */
-            <div className="absolute inset-0 flex items-center justify-center p-6 bg-slate-50 z-30">
-              <div className="max-w-md w-full p-6 rounded-md bg-rose-50 border border-rose-300 text-rose-900 shadow-sm flex flex-col gap-4">
-                <div className="flex items-start gap-3">
-                  <Lock className="text-rose-600 shrink-0 mt-0.5" size={20} />
-                  <div>
-                    <h3 className="font-mono-tech text-xs font-black uppercase tracking-wider text-rose-700">
-                      HTTP 403: Forbidden
-                    </h3>
-                    <p className="text-xs font-semibold mt-1">
-                      Access denied. Your active role clearance (INVESTIGATOR) does not possess case members authorization logic for this metadata scope.
-                    </p>
-                  </div>
-                </div>
-                <div className="pt-3 border-t border-rose-200 flex justify-end">
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase font-mono-tech transition"
-                  >
-                    Close & Reset Panel
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            children
-          )}
+          {children}
         </main>
       </div>
     </div>

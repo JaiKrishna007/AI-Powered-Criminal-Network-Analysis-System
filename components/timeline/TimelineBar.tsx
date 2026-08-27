@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { 
   BarChart, 
   Bar, 
@@ -9,13 +9,14 @@ import {
   ResponsiveContainer, 
   Tooltip 
 } from 'recharts';
-import { Calendar, Play, Pause, AlertCircle } from 'lucide-react';
+import { Calendar, AlertCircle } from 'lucide-react';
 
 interface TimelineBarProps {
   startDate: string; // ISO date format
   setStartDate: (date: string) => void;
   endDate: string; // ISO date format
   setEndValDate: (date: string) => void;
+  // Dynamic relations count to show current filtered size
   filteredCount: number;
   totalCount: number;
 }
@@ -28,24 +29,23 @@ export default function TimelineBar({
   filteredCount,
   totalCount
 }: TimelineBarProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  // Synthetic date density points
-  const chartData = useMemo(() => [
+  // Synthetic data timeline density points (August 2026 - Case 1042)
+  const chartData = [
     { date: '2026-08-08', events: 0, label: 'Aug 8' },
     { date: '2026-08-09', events: 0, label: 'Aug 9' },
-    { date: '2026-08-10', events: 1, label: 'Aug 10' },
-    { date: '2026-08-11', events: 1, label: 'Aug 11' },
-    { date: '2026-08-12', events: 3, label: 'Aug 12' },
+    { date: '2026-08-10', events: 1, label: 'Aug 10' }, // Rohan calls PH001
+    { date: '2026-08-11', events: 1, label: 'Aug 11' }, // Vikram meets Rizwan
+    { date: '2026-08-12', events: 3, label: 'Aug 12' }, // Spike: Call + transfer HDFC
     { date: '2026-08-13', events: 0, label: 'Aug 13' },
-    { date: '2026-08-14', events: 1, label: 'Aug 14' },
-    { date: '2026-08-15', events: 2, label: 'Aug 15' },
-    { date: '2026-08-16', events: 2, label: 'Aug 16' },
+    { date: '2026-08-14', events: 1, label: 'Aug 14' }, // Vehicle toll Pune
+    { date: '2026-08-15', events: 2, label: 'Aug 15' }, // Rizwan transfer Swiss
+    { date: '2026-08-16', events: 2, label: 'Aug 16' }, // David calls PH002
     { date: '2026-08-17', events: 0, label: 'Aug 17' },
     { date: '2026-08-18', events: 0, label: 'Aug 18' }
-  ], []);
+  ];
 
-  const dateMap = useMemo(() => chartData.map((d) => d.date), [chartData]);
+  // Convert dates to numerical indexes for range sliding
+  const dateMap = useMemo(() => chartData.map((d) => d.date), []);
 
   const startIndex = useMemo(() => {
     const idx = dateMap.indexOf(startDate);
@@ -57,41 +57,21 @@ export default function TimelineBar({
     return idx === -1 ? dateMap.length - 1 : idx;
   }, [endDate, dateMap]);
 
-  // Timeline slider auto-play automation (Bottom Dock Play/Pause - Overhaul 3)
-  useEffect(() => {
-    if (!isPlaying) return;
-    
-    const interval = setInterval(() => {
-      const curStartIdx = dateMap.indexOf(startDate);
-      const curEndIdx = dateMap.indexOf(endDate);
-      
-      let nextStart = curStartIdx + 1;
-      let nextEnd = curEndIdx + 1;
-      
-      if (nextEnd >= dateMap.length) {
-        nextStart = 0;
-        nextEnd = 2; // Reset to 2-day initial window
-      }
-      
-      setStartDate(dateMap[nextStart]);
-      setEndValDate(dateMap[nextEnd]);
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, startDate, endDate, dateMap, setStartDate, setEndValDate]);
-
   const handleStartSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
+    // Ensure start doesn't exceed end
     const safeVal = Math.min(val, endIndex);
     setStartDate(dateMap[safeVal]);
   };
 
   const handleEndSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
+    // Ensure end is not less than start
     const safeVal = Math.max(val, startIndex);
     setEndValDate(dateMap[safeVal]);
   };
 
+  // Format date readable
   const formatDateReadable = (isoStr: string) => {
     return new Date(isoStr).toLocaleDateString('en-US', {
       month: 'short',
@@ -100,92 +80,63 @@ export default function TimelineBar({
     });
   };
 
-  // Difference indicators calculations (+/- edge count chips - Overhaul 3)
-  const addedDiff = Math.max(0, filteredCount - 4);
-  const prunedDiff = Math.max(0, totalCount - filteredCount);
-
   return (
-    <div className="w-full p-4 rounded-md border border-slate-300 bg-white flex flex-col gap-3 shadow-sm">
+    <div className="w-full p-4 rounded-xl glass-panel border border-zinc-800/80 flex flex-col gap-3">
       {/* Header controls details */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {/* Play/Pause Button toggle */}
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className={`w-6 h-6 rounded-sm flex items-center justify-center border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 transition shrink-0 ${
-              isPlaying ? 'ring-1 ring-blue-500 border-blue-500' : ''
-            }`}
-            title={isPlaying ? 'Pause auto-play' : 'Play timeline animation'}
-          >
-            {isPlaying ? <Pause size={10} className="fill-slate-600" /> : <Play size={10} className="fill-slate-600 ml-0.5" />}
-          </button>
-          
-          <div className="flex items-center gap-1 text-slate-500">
-            <Calendar size={12} className="text-slate-400" />
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-600 font-mono-tech">
-              Activity_Timeline
-            </h3>
-          </div>
+          <Calendar size={16} className="text-indigo-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+            Temporal Activity Timeline
+          </h3>
         </div>
-
-        {/* Date window & Diff chips (Overhaul 3) */}
-        <div className="flex items-center gap-3 text-[9px] uppercase font-bold tracking-wider text-slate-500">
-          {/* Diff edge indicators */}
-          <div className="flex items-center gap-1">
-            <span className="px-1.5 py-0.5 rounded-sm bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono-tech">
-              +{addedDiff} Added
-            </span>
-            <span className="px-1.5 py-0.5 rounded-sm bg-rose-50 border border-rose-200 text-rose-700 font-mono-tech">
-              -{prunedDiff} Pruned
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 font-mono-tech">
-            <span>Window:</span>
-            <span className="text-blue-600 font-bold">
+        <div className="flex items-center gap-4 text-[10px] uppercase font-bold tracking-wider text-zinc-400">
+          <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-850">
+            <span>Range:</span>
+            <span className="text-indigo-400 font-mono">
               {formatDateReadable(startDate)}
             </span>
-            <span className="text-slate-400 font-normal">to</span>
-            <span className="text-blue-600 font-bold">
+            <span className="text-zinc-500 font-normal">to</span>
+            <span className="text-indigo-400 font-mono">
               {formatDateReadable(endDate)}
             </span>
           </div>
-          
-          <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 font-mono-tech">
-            <span>Links:</span>
-            <span className="text-blue-600 font-bold">
+          <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-850">
+            <span>Active Links:</span>
+            <span className="text-indigo-400 font-mono">
               {filteredCount} / {totalCount}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Recharts chart */}
-      <div className="h-16 w-full relative">
+      {/* Recharts Activity Graph showing communications peaks (FE-03) */}
+      <div className="h-20 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 2, right: 5, left: -32, bottom: 0 }}>
-            <XAxis dataKey="label" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#64748b' }} />
-            <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#64748b' }} allowDecimals={false} />
+          <BarChart data={chartData} margin={{ top: 5, right: 10, left: -30, bottom: 0 }}>
+            <XAxis dataKey="label" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#71717a' }} />
+            <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#71717a' }} allowDecimals={false} />
             <Tooltip
-              contentStyle={{ background: '#ffffff', borderColor: '#cbd5e1', borderRadius: '4px', fontSize: '9px' }}
-              labelStyle={{ color: '#475569', fontWeight: 'bold' }}
-              itemStyle={{ color: '#2563eb' }}
+              contentStyle={{ background: '#18181b', borderColor: 'rgba(255,255,255,0.08)', borderRadius: '8px' }}
+              labelStyle={{ fontSize: '10px', color: '#a1a1aa', fontWeight: 'bold' }}
+              itemStyle={{ fontSize: '10px', color: '#818cf8' }}
             />
             <Bar 
               dataKey="events" 
-              radius={[2, 2, 0, 0]}
-              fill="#2563eb"
+              radius={[4, 4, 0, 0]}
+              fill="#4f46e5"
               fillOpacity={0.6}
             />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Slider inputs */}
-      <div className="relative pt-1 px-1 flex flex-col gap-2">
-        <div className="relative h-1.5 rounded-sm bg-slate-100 border border-slate-200">
+      {/* Interactive Range Sliders */}
+      <div className="relative pt-2 px-1 flex flex-col gap-2">
+        <div className="relative h-2 rounded bg-zinc-950 border border-zinc-850">
+          {/* Visual track between start and end indexes */}
           <div 
-            className="absolute h-full bg-blue-500/15"
+            className="absolute h-full bg-indigo-500/20"
             style={{
               left: `${(startIndex / (dateMap.length - 1)) * 100}%`,
               right: `${100 - (endIndex / (dateMap.length - 1)) * 100}%`
@@ -193,6 +144,7 @@ export default function TimelineBar({
           />
         </div>
 
+        {/* Start Slider */}
         <input
           type="range"
           min={0}
@@ -202,6 +154,7 @@ export default function TimelineBar({
           className="absolute -top-1 w-full h-4 opacity-0 cursor-pointer pointer-events-auto z-10"
         />
 
+        {/* End Slider */}
         <input
           type="range"
           min={0}
@@ -211,13 +164,14 @@ export default function TimelineBar({
           className="absolute -top-1 w-full h-4 opacity-0 cursor-pointer pointer-events-auto z-10"
         />
 
-        <div className="flex justify-between text-[8px] text-slate-400 font-mono-tech px-1">
+        {/* Range controls handle positioning overlay */}
+        <div className="flex justify-between text-[9px] text-zinc-500 font-mono px-1">
           {chartData.map((d) => (
             <span 
               key={d.date} 
               className={`${
                 d.date === startDate || d.date === endDate 
-                  ? 'text-blue-600 font-bold' 
+                  ? 'text-indigo-400 font-bold' 
                   : ''
               }`}
             >
@@ -227,9 +181,10 @@ export default function TimelineBar({
         </div>
       </div>
       
-      <div className="flex items-center gap-1.5 text-[8px] text-slate-400 font-semibold px-1 uppercase font-mono-tech">
-        <AlertCircle size={10} className="text-slate-400 shrink-0" />
-        <span>Use the play toggle to animate the temporal communications diff window.</span>
+      {/* Temporal Diff Alerts */}
+      <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-semibold px-1">
+        <AlertCircle size={12} className="text-zinc-600 shrink-0" />
+        <span>Sliding timeline filters edges in the relationship graph. Spikes indicate dates with matching synthetic logs.</span>
       </div>
     </div>
   );

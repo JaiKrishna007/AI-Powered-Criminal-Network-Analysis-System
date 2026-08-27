@@ -10,7 +10,8 @@ import ReactFlow, {
   useEdgesState,
   Handle,
   Position,
-  NodeProps
+  NodeProps,
+  EdgeLabelRenderer
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -21,78 +22,65 @@ import {
   MapPin, 
   AlertTriangle,
   Fingerprint,
+  CaseSensitive,
   CalendarDays
 } from 'lucide-react';
 import { Entity, Relationship } from '@/lib/client-contracts/contracts';
 
-// Custom Node Styling based on Entity Type (Light Theme Console - Overhaul 1)
+// Custom Node Styling based on Entity Type (XAI visuals - FE-02)
 const CustomNodeComponent = ({ data }: NodeProps<{ entity: Entity; isSelected?: boolean }>) => {
   const entity = data.entity;
   const isSelected = data.isSelected;
-  
-  // Potential Bridge node highlight (Overhaul 1)
-  const isBridge = entity.id === 'P004'; 
 
   const config = useMemo(() => {
     switch (entity.type) {
       case 'PERSON':
-        return { icon: User, color: 'text-indigo-600', bg: 'bg-indigo-50/50' };
+        return { icon: User, color: 'text-indigo-400', bg: 'bg-indigo-950/40', border: 'border-indigo-500/50' };
       case 'PHONE':
-        return { icon: Phone, color: 'text-cyan-600', bg: 'bg-cyan-50/50' };
+        return { icon: Phone, color: 'text-cyan-400', bg: 'bg-cyan-950/40', border: 'border-cyan-500/50' };
       case 'BANK_ACCOUNT':
-        return { icon: Coins, color: 'text-emerald-600', bg: 'bg-emerald-50/50' };
+        return { icon: Coins, color: 'text-emerald-400', bg: 'bg-emerald-950/40', border: 'border-emerald-500/50' };
       case 'VEHICLE':
-        return { icon: Car, color: 'text-amber-600', bg: 'bg-amber-50/50' };
+        return { icon: Car, color: 'text-amber-400', bg: 'bg-amber-950/40', border: 'border-amber-500/50' };
       case 'LOCATION':
-        return { icon: MapPin, color: 'text-rose-600', bg: 'bg-rose-50/50' };
+        return { icon: MapPin, color: 'text-rose-400', bg: 'bg-rose-950/40', border: 'border-rose-500/50' };
       case 'EVENT':
-        return { icon: CalendarDays, color: 'text-violet-600', bg: 'bg-violet-50/50' };
+        return { icon: CalendarDays, color: 'text-violet-400', bg: 'bg-violet-950/40', border: 'border-violet-500/50' };
       default:
-        return { icon: Fingerprint, color: 'text-slate-600', bg: 'bg-slate-50' };
+        return { icon: Fingerprint, color: 'text-zinc-400', bg: 'bg-zinc-900/40', border: 'border-zinc-700/50' };
     }
   }, [entity.type]);
 
   const Icon = config.icon;
 
-  // Active Glow visual properties (Overhaul 1)
-  let nodeStyle = 'border-slate-300 bg-white';
-  if (isSelected) {
-    nodeStyle = 'border-[#0891B2] ring-1 ring-[#0891B2] shadow-[0_0_12px_rgba(8,145,178,0.22)]';
-  } else if (isBridge) {
-    nodeStyle = 'border-[#D97706] ring-1 ring-[#D97706]/40 shadow-[0_0_10px_rgba(217,119,6,0.20)]';
-  }
-
   return (
-    <div className={`p-2.5 rounded-md border w-52 text-left flex flex-col gap-1.5 transition-all text-slate-800 ${nodeStyle}`}>
-      {/* Handles */}
-      <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-1.5 !h-1.5 !border-0" />
-      <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-1.5 !h-1.5 !border-0" />
+    <div className={`p-3 rounded-xl glass-card flex items-center gap-3 w-56 text-left relative ${config.bg} ${config.border} ${
+      isSelected ? 'ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/25 border-indigo-400' : ''
+    }`}>
+      {/* React Flow Source/Target Handles */}
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
 
-      {/* Top Monospace Micro-Header (Overhaul 2) */}
-      <div className="flex items-center justify-between text-[8px] font-mono-tech uppercase text-slate-400 border-b border-slate-100 pb-1 shrink-0">
-        <span>{entity.type.replace('_', ' ')}</span>
-        <span className="font-bold">{entity.id}</span>
+      {/* Node Icon */}
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-zinc-950 border border-zinc-800 shrink-0`}>
+        <Icon size={18} className={config.color} />
       </div>
 
-      {/* Node label and Icon */}
-      <div className="flex items-center gap-2">
-        <div className={`w-7 h-7 rounded flex items-center justify-center border border-slate-200 shrink-0 ${config.bg}`}>
-          <Icon size={14} className={config.color} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-black text-slate-800 truncate">{entity.canonical_name}</p>
-          {entity.aliases && entity.aliases.length > 0 && (
-            <p className="text-[8px] text-slate-400 italic truncate">
-              {entity.aliases.join(', ')}
-            </p>
-          )}
-        </div>
+      {/* Node Details */}
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold text-zinc-100 truncate">{entity.canonical_name}</p>
+        <p className="text-[9px] text-zinc-400 font-semibold tracking-wider uppercase">{entity.type.replace('_', ' ')}</p>
+        {entity.aliases && entity.aliases.length > 0 && (
+          <p className="text-[8px] text-zinc-500 italic truncate mt-0.5">
+            aka: {entity.aliases.join(', ')}
+          </p>
+        )}
       </div>
 
-      {/* Attribute values tag (Tabular Monospace - Overhaul 2) */}
-      {(entity.phone_value || entity.account_number || entity.plate_number) && (
-        <div className="bg-slate-50 border border-slate-200/60 rounded-sm px-1.5 py-0.5 text-[8px] font-mono-tech text-slate-600 truncate">
-          {entity.phone_value || entity.account_number || entity.plate_number}
+      {/* Confidence Badge */}
+      {entity.confidence < 1.0 && (
+        <div className="absolute -top-2 -right-2 bg-zinc-950 border border-zinc-800 text-[8px] font-bold text-indigo-400 px-1.5 py-0.5 rounded-full">
+          {Math.round(entity.confidence * 100)}%
         </div>
       )}
     </div>
@@ -130,7 +118,7 @@ export default function NetworkCanvas({
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
 
-  // Node circular arranger layout to keep nodes organized
+  // Node Arranger: Layout nodes in a circle centered on coordinates to prevent stacking (FE-T01)
   useEffect(() => {
     if (nodes.length === 0) {
       setRfNodes([]);
@@ -138,9 +126,9 @@ export default function NetworkCanvas({
       return;
     }
 
-    const radius = 240;
-    const cx = 300;
-    const cy = 220;
+    const radius = 280;
+    const cx = 350;
+    const cy = 250;
 
     const formattedNodes: Node[] = nodes.map((node, index) => {
       const angle = (index / nodes.length) * 2 * Math.PI;
@@ -170,21 +158,20 @@ export default function NetworkCanvas({
         animated: isHighlighted,
         selected: isSelected,
         style: {
-          stroke: isSelected ? '#2563eb' : isHighlighted ? '#0891B2' : '#94a3b8',
-          strokeWidth: isSelected ? 2.5 : isHighlighted ? 2.0 : 1.2,
+          stroke: isSelected ? '#818cf8' : isHighlighted ? '#a78bfa' : 'rgba(255, 255, 255, 0.25)',
+          strokeWidth: isSelected ? 3 : isHighlighted ? 2.5 : 1.5,
         },
         labelStyle: {
-          fill: '#475569',
-          fontSize: 8,
+          fill: '#a1a1aa',
+          fontSize: 9,
           fontWeight: 600,
-          fontFamily: 'monospace'
         },
-        labelBgPadding: [3, 1],
-        labelBgBorderRadius: 2,
+        labelBgPadding: [4, 2],
+        labelBgBorderRadius: 4,
         labelBgStyle: {
-          fill: '#ffffff',
-          stroke: '#cbd5e1',
-          strokeWidth: 1
+          fill: '#18181b',
+          fillOpacity: 0.9,
+          stroke: 'rgba(255, 255, 255, 0.08)'
         }
       };
     });
@@ -193,14 +180,15 @@ export default function NetworkCanvas({
     setRfEdges(formattedEdges);
   }, [nodes, edges, selectedNodeId, selectedEdgeId, highlightedEdges, setRfNodes, setRfEdges]);
 
+  // Handle Graph Selection (FE-04)
   const onNodeClick = (_: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
-    setSelectedEdgeId(null);
+    setSelectedEdgeId(null); // Deselect edge
   };
 
   const onEdgeClick = (_: React.MouseEvent, edge: Edge) => {
     setSelectedEdgeId(edge.id);
-    setSelectedNodeId(null);
+    setSelectedNodeId(null); // Deselect node
   };
 
   const onPaneClick = () => {
@@ -208,17 +196,18 @@ export default function NetworkCanvas({
     setSelectedEdgeId(null);
   };
 
+  // Node Double Click for Expansion (FE-T03)
   const onNodeDoubleClick = (_: React.MouseEvent, node: Node) => {
     onExpandNode(node.id);
   };
 
   return (
-    <div className="w-full h-full relative bg-[#F8FAFC]">
-      {/* Explicit styled Bounded View Truncation Badge (FE-T02 / Refinements) */}
+    <div className="w-full h-full relative bg-zinc-950">
+      {/* Graph Truncation indicator warning (FE-02) */}
       {truncated && (
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-2.5 py-1.5 rounded bg-white border border-slate-300 text-slate-600 text-[10px] font-bold shadow-sm font-mono-tech">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
-          <span>⚡ Bounded View: 1–2 Hops</span>
+        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-900/50 text-amber-400 text-xs font-semibold backdrop-blur-md">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>Graph Bounded: Traversal limit reached. Double-click a node to expand.</span>
         </div>
       )}
 
@@ -237,7 +226,7 @@ export default function NetworkCanvas({
         className="w-full h-full"
       >
         <Controls showInteractive={false} className="z-10" />
-        <Background color="#cbd5e1" gap={20} size={1} />
+        <Background color="#27272a" gap={20} size={1} />
       </ReactFlow>
     </div>
   );

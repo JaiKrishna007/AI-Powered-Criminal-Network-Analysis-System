@@ -4,9 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   FileText, 
+  CheckCircle2, 
+  XCircle, 
+  HelpCircle, 
   ArrowRight,
   ShieldCheck,
-  AlertTriangle,
+  AlertOctagon,
+  Copy,
   Plus
 } from 'lucide-react';
 import { Entity, Relationship, Evidence } from '@/lib/client-contracts/contracts';
@@ -16,6 +20,7 @@ interface RelationshipDrawerProps {
   selectedEdgeId: string | null;
   onClose: () => void;
   onSetSeed: (id: string) => void;
+  // Shared Entities database to look up node labels
   allEntities: Entity[];
 }
 
@@ -33,6 +38,7 @@ export default function RelationshipDrawer({
   const [verifyingHashId, setVerifyingHashId] = useState<string | null>(null);
   const [tamperedHashes, setTamperedHashes] = useState<Record<string, boolean>>({});
 
+  // 1. Listen for Node Selection
   useEffect(() => {
     if (selectedNodeId) {
       const node = allEntities.find((e) => e.id === selectedNodeId);
@@ -70,12 +76,15 @@ export default function RelationshipDrawer({
   const sourceNode = edgeData ? allEntities.find((e) => e.id === edgeData.source) : null;
   const targetNode = edgeData ? allEntities.find((e) => e.id === edgeData.target) : null;
 
+  // Verify Evidence Hash (FE-T04 / FR-25)
   const verifyEvidenceHash = async (evId: string) => {
     setVerifyingHashId(evId);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    // Simulate API query with hash calculation delay
+    await new Promise((resolve) => setTimeout(resolve, 800));
     setVerifyingHashId(null);
   };
 
+  // Toggle Hash Tampering (FR-25)
   const toggleTamperEvidence = (evId: string) => {
     setTamperedHashes((prev) => ({
       ...prev,
@@ -86,225 +95,237 @@ export default function RelationshipDrawer({
   if (!selectedNodeId && !selectedEdgeId) return null;
 
   return (
-    <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-slate-300 shadow-xl flex flex-col z-10 transition-transform duration-300">
-      {/* Header */}
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
-        <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono-tech">
-          {nodeData ? 'Entity Inspector' : 'Link Inspector'}
+    <div className="absolute top-0 right-0 w-80 h-full bg-zinc-900/90 border-l border-zinc-800/80 backdrop-blur-md shadow-2xl flex flex-col z-10 transition-transform duration-300">
+      {/* Drawer Header */}
+      <div className="p-4 border-b border-zinc-800/80 flex items-center justify-between bg-zinc-900/60">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+          {nodeData ? 'Entity Inspector' : 'Relationship Inspector'}
         </h3>
         <button 
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-200/60 transition"
+          className="text-zinc-500 hover:text-zinc-300 p-1 rounded hover:bg-zinc-800 transition"
         >
-          <X size={14} />
+          <X size={16} />
         </button>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Drawer Body */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
         {loading ? (
           <div className="space-y-3 pt-4">
-            <div className="h-5 w-3/4 rounded-sm bg-slate-100 animate-pulse"></div>
-            <div className="h-4 w-1/2 rounded-sm bg-slate-100 animate-pulse"></div>
-            <div className="h-24 rounded-sm bg-slate-100 animate-pulse mt-4"></div>
+            <div className="h-6 w-3/4 rounded bg-zinc-800/60 animate-pulse"></div>
+            <div className="h-4 w-1/2 rounded bg-zinc-800/60 animate-pulse"></div>
+            <div className="h-20 rounded bg-zinc-800/60 animate-pulse mt-4"></div>
           </div>
         ) : nodeData ? (
-          // Node Inspector View
-          <div className="space-y-4">
+          // NODE VIEW
+          <div className="space-y-5">
             <div>
-              <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-mono-tech">
+              <span className="text-[10px] font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-wider">
                 {nodeData.type.replace('_', ' ')}
               </span>
-              <h2 className="text-base font-bold text-slate-900 mt-2">{nodeData.canonical_name}</h2>
+              <h2 className="text-lg font-bold text-zinc-100 mt-2">{nodeData.canonical_name}</h2>
               {nodeData.aliases && nodeData.aliases.length > 0 && (
-                <p className="text-xs text-slate-500 mt-1">
-                  Aliases: <span className="text-slate-700 italic">{nodeData.aliases.join(', ')}</span>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Aliases: <span className="text-zinc-300 italic">{nodeData.aliases.join(', ')}</span>
                 </p>
               )}
             </div>
 
-            {/* Profile Detail Grid */}
-            <div className="p-3 rounded bg-slate-50 border border-slate-200 space-y-3">
-              <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-1 font-mono-tech">
-                SYSTEM_METADATA
+            {/* Entity Attributes */}
+            <div className="p-3.5 rounded-lg bg-zinc-950 border border-zinc-800/60 space-y-3">
+              <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-800/80 pb-1.5">
+                Attributes
               </h4>
-              <div className="grid grid-cols-2 gap-2.5 text-xs text-slate-650">
+              <div className="grid grid-cols-2 gap-2.5 text-xs">
                 <div>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">RECORD_ID</p>
-                  <p className="font-semibold font-mono-tech text-slate-800">{nodeData.id}</p>
+                  <p className="text-[10px] text-zinc-500 font-medium">Record ID</p>
+                  <p className="font-semibold text-zinc-300">{nodeData.id}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">MATCH_CONF</p>
-                  <p className="font-semibold font-mono-tech text-slate-800">{(nodeData.confidence * 100).toFixed(0)}%</p>
+                  <p className="text-[10px] text-zinc-500 font-medium">Confidence Score</p>
+                  <p className="font-semibold text-zinc-300">{(nodeData.confidence * 100).toFixed(0)}%</p>
                 </div>
                 {nodeData.phone_value && (
                   <div className="col-span-2">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">PHONE_VALUE</p>
-                    <p className="font-semibold font-mono-tech text-slate-850">{nodeData.phone_value}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">Phone Number</p>
+                    <p className="font-semibold text-zinc-300 font-mono">{nodeData.phone_value}</p>
                   </div>
                 )}
                 {nodeData.account_number && (
                   <div className="col-span-2">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">BANK_ACCOUNT</p>
-                    <p className="font-semibold font-mono-tech text-slate-855">{nodeData.account_number}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">Bank Account</p>
+                    <p className="font-semibold text-zinc-300 font-mono">{nodeData.account_number}</p>
                   </div>
                 )}
                 {nodeData.plate_number && (
                   <div className="col-span-2">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">REGISTRATION_PLATE</p>
-                    <p className="font-semibold font-mono-tech text-slate-855">{nodeData.plate_number}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">License Plate</p>
+                    <p className="font-semibold text-zinc-300 font-mono">{nodeData.plate_number}</p>
                   </div>
                 )}
                 {nodeData.address_label && (
                   <div className="col-span-2">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">GEO_COORDINATE</p>
-                    <p className="font-semibold text-slate-700">{nodeData.address_label}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">Physical Location</p>
+                    <p className="font-semibold text-zinc-300">{nodeData.address_label}</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <button 
-              onClick={() => onSetSeed(nodeData.id)}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition"
-            >
-              <Plus size={12} />
-              <span>Use as Copilot Seed</span>
-            </button>
+            {/* Node Actions */}
+            <div className="space-y-2">
+              <button 
+                onClick={() => onSetSeed(nodeData.id)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/10 transition"
+              >
+                <Plus size={14} />
+                <span>Use as Copilot Seed</span>
+              </button>
+              <p className="text-[10px] text-zinc-500 text-center italic">
+                Double-click node in canvas to expand connections
+              </p>
+            </div>
           </div>
         ) : edgeData ? (
-          // Link Inspector View
-          <div className="space-y-4">
+          // EDGE/RELATIONSHIP VIEW (FE-04)
+          <div className="space-y-5">
             <div>
-              <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-mono-tech">
+              <span className="text-[10px] font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-wider">
                 {edgeData.type.replace('_', ' ')}
               </span>
-              <div className="flex items-center gap-1.5 mt-2 font-bold text-xs text-slate-800">
-                <span className="truncate max-w-[100px]">{sourceNode?.canonical_name || edgeData.source}</span>
-                <ArrowRight size={12} className="text-slate-400 shrink-0" />
-                <span className="truncate max-w-[100px]">{targetNode?.canonical_name || edgeData.target}</span>
+              <div className="flex items-center gap-2 mt-3 font-semibold text-sm">
+                <span className="text-zinc-200 truncate max-w-[100px]">{sourceNode?.canonical_name || edgeData.source}</span>
+                <ArrowRight size={14} className="text-zinc-500 shrink-0" />
+                <span className="text-zinc-200 truncate max-w-[100px]">{targetNode?.canonical_name || edgeData.target}</span>
               </div>
             </div>
 
-            {/* Link details */}
-            <div className="p-3 rounded bg-slate-50 border border-slate-200 space-y-3">
-              <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-1 font-mono-tech">
-                LINK_METADATA
+            {/* Relationship properties */}
+            <div className="p-3.5 rounded-lg bg-zinc-950 border border-zinc-800/60 space-y-3">
+              <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-800/80 pb-1.5">
+                Link Properties
               </h4>
-              <div className="grid grid-cols-2 gap-2 text-xs text-slate-650">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 {edgeData.amount && (
-                  <div className="col-span-2 border-b border-slate-200 pb-2">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">TRANSACTION_AMOUNT</p>
-                    <p className="text-base font-bold text-emerald-600 font-mono-tech">
+                  <div className="col-span-2">
+                    <p className="text-[10px] text-zinc-500 font-medium">Transaction Amount</p>
+                    <p className="text-base font-bold text-emerald-400">
                       INR {edgeData.amount.toLocaleString()}
                     </p>
                   </div>
                 )}
                 {edgeData.timestamp && (
                   <div className="col-span-2">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">UTC_TIMESTAMP</p>
-                    <p className="font-semibold text-slate-800 font-mono-tech text-[10px]">
-                      {edgeData.timestamp}
+                    <p className="text-[10px] text-zinc-500 font-medium">Occurred At</p>
+                    <p className="font-semibold text-zinc-300 font-mono">
+                      {new Date(edgeData.timestamp).toUTCString()}
                     </p>
                   </div>
                 )}
                 {edgeData.valid_from && (
                   <div>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">VALID_FROM</p>
-                    <p className="font-semibold text-slate-700 font-mono-tech">{edgeData.valid_from.split('T')[0]}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">Valid From</p>
+                    <p className="font-semibold text-zinc-300 font-mono">{edgeData.valid_from.split('T')[0]}</p>
                   </div>
                 )}
                 {edgeData.valid_to && (
                   <div>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">VALID_TO</p>
-                    <p className="font-semibold text-slate-700 font-mono-tech">{edgeData.valid_to.split('T')[0]}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">Valid To</p>
+                    <p className="font-semibold text-zinc-300 font-mono">{edgeData.valid_to.split('T')[0]}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase font-mono-tech">PROB_INDEX</p>
-                  <p className="font-semibold text-slate-700 font-mono-tech">
+                  <p className="text-[10px] text-zinc-500 font-medium">Link Confidence</p>
+                  <p className="font-semibold text-zinc-300">
                     {edgeData.confidence ? `${(edgeData.confidence * 100).toFixed(0)}%` : '100%'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Supporting evidence */}
-            <div className="space-y-3.5">
-              <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest font-mono-tech">
-                EVIDENCE_TRAIL ({evidence.length})
+            {/* Supporting Evidence Chain (FR-25 / FE-T04) */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                Source Evidence Trail ({evidence.length})
               </h4>
-              <div className="space-y-3">
-                {evidence.map((ev) => {
-                  const isTampered = !!tamperedHashes[ev.id];
-                  const integrity = isTampered ? 'HASH_MISMATCH' : 'VERIFIED';
-                  
-                  return (
-                    <div key={ev.id} className="p-3 rounded bg-white border border-slate-300 space-y-2 text-[11px] shadow-sm">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <FileText size={12} className="text-slate-400 shrink-0" />
-                          <span className="font-bold text-slate-800 font-mono-tech">{ev.id}</span>
+              {evidence.length === 0 ? (
+                <p className="text-xs text-zinc-500 italic">No supporting evidence artifacts.</p>
+              ) : (
+                <div className="space-y-3">
+                  {evidence.map((ev) => {
+                    const isTampered = !!tamperedHashes[ev.id];
+                    const integrity = isTampered ? 'HASH_MISMATCH' : 'VERIFIED';
+                    
+                    return (
+                      <div key={ev.id} className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/80 space-y-2">
+                        {/* Evidence Title & Type */}
+                        <div className="flex items-start justify-between gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <FileText size={14} className="text-zinc-500 shrink-0" />
+                            <span className="text-xs font-bold text-zinc-200">{ev.id}</span>
+                          </div>
+                          <span className="text-[8px] font-bold bg-zinc-900 border border-zinc-800 text-zinc-400 px-1 rounded">
+                            {ev.source_type}
+                          </span>
                         </div>
-                        <span className="text-[8px] font-bold bg-slate-100 border border-slate-200 text-slate-600 px-1 rounded-sm font-mono-tech">
-                          {ev.source_type}
-                        </span>
-                      </div>
 
-                      {/* Excerpt box (Forensic Details - Overhaul 5) */}
-                      {ev.content && (
-                        <div className="p-2 rounded bg-slate-50 border border-slate-200/60 font-mono-tech text-[9px] text-slate-600 break-words leading-relaxed select-text">
-                          "{ev.content}"
-                        </div>
-                      )}
+                        {/* Snippet */}
+                        {ev.content && (
+                          <p className="text-[10px] text-zinc-400 leading-normal bg-zinc-900/60 p-2 rounded border border-zinc-900">
+                            "{ev.content}"
+                          </p>
+                        )}
 
-                      <p className="text-[8px] text-slate-400 font-mono-tech">
-                        Path: {ev.source_ref}
-                      </p>
-
-                      {/* Checksums */}
-                      <div className="pt-2 border-t border-slate-100 space-y-1">
-                        <div className="flex items-center justify-between text-[8px] text-slate-500 uppercase tracking-wider font-bold font-mono-tech">
-                          <span>SHA-256 Checksum</span>
-                          {integrity === 'VERIFIED' ? (
-                            <span className="text-emerald-600 flex items-center gap-0.5">
-                              <ShieldCheck size={9} /> Verified
-                            </span>
-                          ) : (
-                            <span className="text-rose-600 flex items-center gap-0.5 animate-pulse">
-                              <AlertTriangle size={9} /> TAMPER DETECTED
-                            </span>
-                          )}
-                        </div>
-                        
-                        <p className="text-[8px] font-mono-tech text-slate-500 bg-slate-50 border border-slate-200 p-1 rounded-sm break-all select-all">
-                          {isTampered ? '7283192083192039281039218239120372831920831920392810392182391203' : ev.sha256}
+                        {/* Provenance ref */}
+                        <p className="text-[8px] text-zinc-500 font-mono">
+                          Ref: {ev.source_ref}
                         </p>
 
-                        <div className="flex gap-1.5 pt-1">
-                          <button
-                            onClick={() => verifyEvidenceHash(ev.id)}
-                            disabled={verifyingHashId === ev.id}
-                            className="flex-1 py-1 rounded-sm bg-slate-50 hover:bg-slate-100 border border-slate-300 text-[9px] font-bold text-slate-600 transition"
-                          >
-                            {verifyingHashId === ev.id ? 'Verifying...' : 'Verify Signature'}
-                          </button>
-                          <button
-                            onClick={() => toggleTamperEvidence(ev.id)}
-                            className={`px-2 py-1 rounded-sm text-[9px] font-bold border transition ${
-                              isTampered 
-                                ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' 
-                                : 'bg-slate-50 border-slate-300 text-slate-400 hover:text-slate-600'
-                            }`}
-                          >
-                            {isTampered ? 'Reset' : 'Tamper'}
-                          </button>
+                        {/* Cryptographic Hash Audit Block (FR-25) */}
+                        <div className="pt-2 border-t border-zinc-900 space-y-1">
+                          <div className="flex items-center justify-between text-[8px] text-zinc-500 uppercase tracking-wider font-bold">
+                            <span>SHA-256 Digital Fingerprint</span>
+                            {integrity === 'VERIFIED' ? (
+                              <span className="text-emerald-400 flex items-center gap-0.5">
+                                <ShieldCheck size={10} /> Verified
+                              </span>
+                            ) : (
+                              <span className="text-rose-400 flex items-center gap-0.5 animate-pulse">
+                                <AlertOctagon size={10} /> TAMPER DETECTED
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[8px] font-mono text-zinc-600 bg-zinc-900 p-1 rounded select-all break-all border border-zinc-900">
+                            {isTampered ? '7283192083192039281039218239120372831920831920392810392182391203' : ev.sha256}
+                          </p>
+                          
+                          {/* Integrity Verification controls */}
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => verifyEvidenceHash(ev.id)}
+                              disabled={verifyingHashId === ev.id}
+                              className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[9px] font-semibold transition text-zinc-300"
+                            >
+                              {verifyingHashId === ev.id ? 'Computing...' : 'Recalculate Hash'}
+                            </button>
+                            <button
+                              onClick={() => toggleTamperEvidence(ev.id)}
+                              className={`px-2 py-1 rounded text-[9px] font-semibold border transition ${
+                                isTampered 
+                                  ? 'bg-rose-950/40 border-rose-900/50 text-rose-400 hover:bg-rose-950/60' 
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                              }`}
+                            >
+                              {isTampered ? 'Untamper' : 'Simulate Tamper'}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         ) : null}
