@@ -42,6 +42,101 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
   const [activeTab, setActiveTab] = useState('overview');
   const [caseObj, setCaseObj] = useState<Case | null>(null);
 
+  // Settings UI states
+  const [showSettings, setShowSettings] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editClassification, setEditClassification] = useState<any>('CASE_RESTRICTED');
+  const [settingsError, setSettingsError] = useState('');
+  const [settingsSuccess, setSettingsSuccess] = useState(false);
+
+  // Sync edits state when caseObj changes
+  useEffect(() => {
+    if (caseObj) {
+      setEditTitle(caseObj.title);
+      setEditClassification(caseObj.classification);
+    }
+  }, [caseObj]);
+
+  const handleSaveChanges = async () => {
+    if (!editTitle.trim()) {
+      setSettingsError('Title is required.');
+      return;
+    }
+    setSettingsError('');
+    setSettingsSuccess(false);
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          classification: editClassification
+        })
+      });
+      if (res.ok) {
+        setSettingsSuccess(true);
+        fetchCaseData(); // Refresh case page details
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSettingsError(err.message || 'Failed to save settings.');
+      }
+    } catch (err: any) {
+      setSettingsError(err.message || 'Failed to communicate with database.');
+    }
+  };
+
+  const handleCloseCase = async () => {
+    const confirm = window.confirm('Are you sure you want to CLOSE this investigation? The workspace will become read-only.');
+    if (!confirm) return;
+
+    setSettingsError('');
+    setSettingsSuccess(false);
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'CLOSED'
+        })
+      });
+      if (res.ok) {
+        setSettingsSuccess(true);
+        fetchCaseData(); // Refresh case details
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSettingsError(err.message || 'Failed to close case.');
+      }
+    } catch (err: any) {
+      setSettingsError(err.message || 'Failed to close case.');
+    }
+  };
+
+  const handleArchiveCase = async () => {
+    const confirm = window.confirm('Are you sure you want to ARCHIVE this case? It will be hidden from default case views.');
+    if (!confirm) return;
+
+    setSettingsError('');
+    setSettingsSuccess(false);
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'ARCHIVED'
+        })
+      });
+      if (res.ok) {
+        setSettingsSuccess(true);
+        fetchCaseData(); // Refresh case details
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSettingsError(err.message || 'Failed to archive case.');
+      }
+    } catch (err: any) {
+      setSettingsError(err.message || 'Failed to archive case.');
+    }
+  };
+
   // Graph state
   const [nodes, setNodes] = useState<Entity[]>([]);
   const [edges, setEdges] = useState<Relationship[]>([]);
@@ -387,17 +482,129 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                   {caseObj && (
                     <div className="p-6 rounded-2xl glass-panel border border-zinc-800 flex flex-col gap-4 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 blur-3xl rounded-full"></div>
-                      <div>
-                        <span className="text-[9px] font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-widest">
-                          {caseObj.classification.replace('_', ' ')}
-                        </span>
-                        <h2 className="text-2xl font-black text-zinc-100 tracking-wide mt-3">
-                          {caseObj.title}
-                        </h2>
-                        <p className="text-xs text-zinc-400 mt-2.5 leading-relaxed max-w-3xl">
-                          {caseObj.description}
+                      
+                      <div className="flex justify-between items-start z-10">
+                        <div>
+                          <span className="text-[9px] font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-widest">
+                            {caseObj.classification.replace('_', ' ')}
+                          </span>
+                          <h2 className="text-2xl font-black text-zinc-100 tracking-wide mt-3">
+                            {caseObj.title}
+                          </h2>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSettingsError('');
+                            setSettingsSuccess(false);
+                            setShowSettings(!showSettings);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-bold transition shadow-sm z-20"
+                        >
+                          {showSettings ? 'Hide Settings' : 'Case Settings'}
+                        </button>
+                      </div>
+
+                      <div className="z-10">
+                        <p className="text-xs text-zinc-400 leading-relaxed max-w-3xl">
+                          {caseObj.description || 'No description provided.'}
                         </p>
                       </div>
+
+                      {showSettings && (
+                        <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/40 space-y-4 text-xs z-10">
+                          <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                              Workspace Management Settings
+                            </h3>
+                            <p className="text-[10px] text-zinc-500">
+                              Edit case title, classification, or transition workspace status.
+                            </p>
+                          </div>
+                          
+                          {settingsError && (
+                            <div className="p-2.5 rounded bg-red-950/40 border border-red-900/40 text-red-400 text-[10px] font-bold">
+                              {settingsError}
+                            </div>
+                          )}
+
+                          {settingsSuccess && (
+                            <div className="p-2.5 rounded bg-emerald-950/40 border border-emerald-900/40 text-emerald-400 text-[10px] font-bold">
+                              Case settings updated successfully.
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Title edit */}
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase">Case Title</label>
+                              <input
+                                type="text"
+                                value={editTitle}
+                                onChange={(e) => setEditTitle(e.target.value)}
+                                disabled={caseObj.status !== 'ACTIVE'}
+                                className="w-full px-3 py-2 rounded bg-zinc-900/60 border border-zinc-850 text-zinc-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                              />
+                            </div>
+
+                            {/* Classification edit */}
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase">Classification</label>
+                              <select
+                                value={editClassification}
+                                onChange={(e) => setEditClassification(e.target.value as any)}
+                                disabled={caseObj.status !== 'ACTIVE'}
+                                className="w-full px-3 py-2 rounded bg-zinc-900/60 border border-zinc-850 text-zinc-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                              >
+                                <option value="PUBLIC">PUBLIC</option>
+                                <option value="CASE_RESTRICTED">CASE RESTRICTED</option>
+                                <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+                                <option value="SECRET">SECRET</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Lifecycle action buttons */}
+                          <div className="flex items-center justify-between pt-3 border-t border-zinc-850">
+                            <div className="flex gap-2">
+                              {caseObj.status === 'ACTIVE' && (
+                                <button
+                                  type="button"
+                                  onClick={handleCloseCase}
+                                  className="px-3.5 py-1.5 rounded-lg bg-amber-600/10 border border-amber-500/20 hover:bg-amber-600/25 text-amber-400 font-bold text-[10px] transition"
+                                >
+                                  Close Workspace
+                                </button>
+                              )}
+                              
+                              {caseObj.status === 'CLOSED' && (
+                                <button
+                                  type="button"
+                                  onClick={handleArchiveCase}
+                                  className="px-3.5 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/20 hover:bg-indigo-600/25 text-indigo-400 font-bold text-[10px] transition"
+                                >
+                                  Archive Case
+                                </button>
+                              )}
+
+                              {caseObj.status === 'ARCHIVED' && (
+                                <span className="text-[10px] italic text-zinc-500 font-bold">
+                                  Workspace is archived and read-only.
+                                </span>
+                              )}
+                            </div>
+
+                            {caseObj.status === 'ACTIVE' && (
+                              <button
+                                type="button"
+                                onClick={handleSaveChanges}
+                                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] transition shadow-md shadow-indigo-600/10"
+                              >
+                                Save Changes
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Case stats metadata strip */}
                       <div className="grid grid-cols-4 gap-4 border-t border-zinc-850 pt-4 mt-2">
