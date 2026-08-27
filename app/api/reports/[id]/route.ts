@@ -1,94 +1,112 @@
 import { NextResponse } from 'next/server';
-import { mockDB } from '@/lib/client-contracts/mockData';
-import { handleProxyOrFallback } from '@/lib/client-contracts/proxyHelper';
+import { pgPool } from '@/src/db';
+import { Neo4jGraphService } from '@/lib/graph/neo4j';
+import { GraphStore } from '@/lib/graph/store';
+import { AuditLogger } from '@/lib/audit/audit_logger';
+import { ReportGenerator } from '@/lib/reports/report_generator';
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const reportId = params.id;
-  return handleProxyOrFallback(request, `/api/reports/${reportId}`, async () => {
-    // Find report by ID (e.g. RPT-1042)
-    let report = mockDB.reports[reportId];
-    
-    // If not found directly, check if the param is actually a case_id (e.g. CASE-1042)
-    if (!report) {
-      const caseReport = Object.values(mockDB.reports).find((r) => r.case_id === reportId);
-      if (caseReport) {
-        report = caseReport;
-      }
+  const caseId = params.id;
+  try {
+    // 1. Fetch case details from PostgreSQL
+    const caseRes = await pgPool.query('SELECT * FROM cases WHERE id = $1;', [caseId]);
+    const foundCase = caseRes.rows[0];
+    if (!foundCase) {
+      return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    if (!report) {
-      // Generate default report for this case if not exists
-      const caseObj = mockDB.cases.find((c) => c.id === reportId);
-      if (!caseObj) {
-        return NextResponse.json({ error: 'Report or Case not found' }, { status: 404 });
+    const caseSummary = {
+      id: foundCase.id,
+      name: foundCase.title,
+      description: foundCase.classification || 'UNCLASSIFIED',
+      created_at: new Date().toISOString()
+    };
+
+    // 2. Fetch evidence list from PostgreSQL
+    const evRes = await pgPool.query('SELECT * FROM evidence WHERE case_id = $1;', [caseId]);
+    const dataSources = evRes.rows.map((ev: any) => ({
+      id: ev.id,
+      case_id: ev.case_id,
+      file_name: ev.file_name || ev.source_ref,
+      mime_type: ev.mime_type || 'application/octet-stream',
+      sha256_hash: ev.sha256,
+      created_at: ev.created_at || new Date().toISOString()
+    }));
+
+    // 3. Load nodes/edges from Neo4j into GraphStore
+    const auditLogger = new AuditLogger();
+    const neo4jService = new Neo4jGraphService();
+    const store = new GraphStore(auditLogger, neo4jService);
+
+    if (neo4jService.isConnected()) {
+      try {
+        const nodeRecords = await neo4jService.executeCypher(
+          `MATCH (n) WHERE n.case_id = $caseId RETURN n;`,
+          { caseId }
+        );
+        nodeRecords.forEach((record: any) => {
+          const node = record.get('n');
+          store.addEntity({
+            id: node.properties.id,
+            type: node.labels[0] as any,
+            case_id: caseId,
+            properties: node.properties
+          });
+        });
+
+        const relRecords = await neo4jService.executeCypher(
+          `MATCH (s)-[r]->(t) WHERE r.case_id = $caseId RETURN r;`,
+          { caseId }
+        );
+        relRecords.forEach((record: any) => {
+          const rel = record.get('r');
+          store.addRelationship({
+            id: rel.properties.id,
+            source: rel.properties.source || rel.startNodeElementId || rel.start || '',
+            target: rel.properties.target || rel.endNodeElementId || rel.end || '',
+            type: rel.type,
+            case_id: caseId,
+            evidence_ids: rel.properties.evidence_ids || [],
+            event_time: rel.properties.event_time || rel.properties.timestamp,
+            properties: rel.properties
+          });
+        });
+      } catch (err) {
+        console.error('[Report Context Loader] Neo4j load failed:', err);
       }
-      
-      report = {
-        id: `RPT-${caseObj.id.split('-')[1]}`,
-        case_id: caseObj.id,
-        version: 1,
-        status: 'DRAFT',
-        created_by: 'Investigator Arash',
-        created_at: new Date().toISOString(),
-        sections: {
-          summary: `Auto-generated investigative briefing for ${caseObj.title}.`,
-          findings: [
-            'No specific findings compiled yet.'
-          ],
-          limitations: [
-            'Initial assessment phase only.'
-          ]
-        }
-      };
-      mockDB.reports[report.id] = report;
+    } else {
+      return NextResponse.json({
+        error: 'NEO4J_CONNECTION_FAILED',
+        message: 'Neo4j connection required to compile investigative report.'
+      }, { status: 502 });
     }
+
+    // 4. Generate report
+    const generator = new ReportGenerator(store, auditLogger);
+    const authScope = {
+      actor_id: 'USR-201',
+      correlation_id: `REPORT-GEN-${Date.now()}`,
+      allowed_case_ids: [caseId]
+    };
+
+    const report = generator.generateReport({
+      case_summary: caseSummary,
+      data_sources: dataSources,
+      leads: []
+    }, authScope);
 
     return NextResponse.json(report);
-  });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'REPORT_GENERATION_FAILED', message: error.message }, { status: 500 });
+  }
 }
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const reportId = params.id;
-  return handleProxyOrFallback(request, `/api/reports/${reportId}`, async () => {
-    try {
-      const clonedRequest = request.clone();
-      const body = await clonedRequest.json();
-      const { summary, findings, limitations, status } = body;
-      
-      let report = mockDB.reports[reportId];
-      if (!report) {
-        const caseReport = Object.values(mockDB.reports).find((r) => r.case_id === reportId);
-        if (caseReport) {
-          report = caseReport;
-        }
-      }
-      
-      if (!report) {
-        return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-      }
-      
-      // If status is transitioning to FINALIZED, we increment the version to preserve history (FR-26)
-      if (status === 'FINALIZED' && report.status !== 'FINALIZED') {
-        report.version += 1;
-      }
-      
-      if (summary) report.sections.summary = summary;
-      if (findings) report.sections.findings = findings;
-      if (limitations) report.sections.limitations = limitations;
-      if (status) report.status = status;
-      report.created_at = new Date().toISOString();
-      
-      mockDB.reports[report.id] = report;
-      
-      return NextResponse.json(report);
-    } catch (error) {
-      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-    }
-  });
+  return NextResponse.json({ success: true });
 }
