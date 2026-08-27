@@ -74,7 +74,7 @@ except Exception as e:
 # ---------------------------------------------------------------------
 # 3. ANALYTICS & RELATIONSHIPS
 # ---------------------------------------------------------------------
-print("--- TASK 6: Analytics & Relationship Inspection ---")
+print("--- TASK 6: Analytics, Bridge, Temporal & Relationship Inspection ---")
 
 # Bridge Analytics
 try:
@@ -130,6 +130,29 @@ try:
     log_test("Copilot/RAG Context (/api/cases/CASE-101/copilot/context)", is_valid, data)
 except Exception as e:
     log_test("Copilot/RAG Context (/api/cases/CASE-101/copilot/context)", False)
+
+# ---------------------------------------------------------------------
+# 6. AUDIT LOGS & REPORT GENERATION
+# ---------------------------------------------------------------------
+print("--- TASK 6: Audit Trail & Investigation Report Generation ---")
+
+# Audit Logs
+try:
+    res = requests.get(f"{BASE_URL}/api/cases/CASE-101/audit")
+    data = res.json()
+    is_valid = res.status_code == 200 and data.get("contract") == "AUDIT_LOGS.v1"
+    log_test("Audit Trail Logs (/api/cases/CASE-101/audit)", is_valid, data)
+except Exception as e:
+    log_test("Audit Trail Logs (/api/cases/CASE-101/audit)", False)
+
+# Report Generation
+try:
+    res = requests.post(f"{BASE_URL}/api/cases/CASE-101/reports/generate")
+    data = res.json()
+    is_valid = res.status_code == 200 and data.get("contract") == "REPORT.v1"
+    log_test("Investigation Report Generation (/api/cases/CASE-101/reports/generate)", is_valid, data)
+except Exception as e:
+    log_test("Investigation Report Generation (/api/cases/CASE-101/reports/generate)", False)
 
 print("=================================================================")
 print(f"     SUMMARY: {passed_tests} PASSED | {failed_tests} FAILED")

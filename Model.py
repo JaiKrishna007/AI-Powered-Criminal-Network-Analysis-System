@@ -351,11 +351,13 @@ def get_copilot_context(
     case_id: str,
     entity_id: Optional[str] = Query("E101", description="Focus entity ID for Copilot context")
 ):
+    target_entity = entity_id if (isinstance(entity_id, str) and not hasattr(entity_id, 'default')) else "E101"
+    
     # Fetch GRAPH.v1
-    graph_data = get_case_graph(case_id=case_id, entity_id=entity_id, max_hops=2)
+    graph_data = get_case_graph(case_id=case_id, entity_id=target_entity, max_hops=2)
     
     # Generate INSIGHT.v1
-    insight_data = fuse_insight(case_id=case_id, req=InsightFusionRequest(case_id=case_id, entity_ids=[entity_id, "E301"]))
+    insight_data = fuse_insight(case_id=case_id, req=InsightFusionRequest(case_id=case_id, entity_ids=[target_entity, "E301"]))
     
     # Evidence Mapping
     evidence_items = [
@@ -366,7 +368,7 @@ def get_copilot_context(
     # Grounding Prompt Construction for Copilot LLM
     grounding_prompt = f"""
 [INVESTIGATION CONTEXT - CASE {case_id}]
-Target Entity: {entity_id}
+Target Entity: {target_entity}
 Insight Type: {insight_data['insight_type']} (Severity: {insight_data['severity']}, Confidence: {insight_data['confidence_score']})
 Key Finding: {insight_data['summary']}
 
@@ -379,16 +381,80 @@ Connected Key Bridge Entities: E301 (Anil Kapoor), E103 (Karan Malhotra)
 - EVID-303: Call Detail Record (143 calls in 24 hours)
 
 [INSTRUCTIONS FOR COPILOT]
-Explain these findings clearly to the investigator, highlighting the bridge node role of E301 and the financial anomaly surrounding {entity_id}.
+Explain these findings clearly to the investigator, highlighting the bridge node role of E301 and the financial anomaly surrounding {target_entity}.
     """.strip()
 
     return {
         "contract": "COPILOT_CONTEXT.v1",
         "case_id": case_id,
-        "target_entity_id": entity_id,
+        "target_entity_id": target_entity,
         "insight": insight_data,
         "graph": graph_data,
         "evidence": evidence_items,
         "grounding_prompt": grounding_prompt,
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
+
+# ---------------------------------------------------------------------
+# 9. AUDIT & REPORT GENERATION ENDPOINTS
+# ---------------------------------------------------------------------
+@app.get("/api/cases/{case_id}/audit", summary="Fetch Audit Trail Logs for Case")
+def get_case_audit_logs(case_id: str):
+    return {
+        "contract": "AUDIT_LOGS.v1",
+        "case_id": case_id,
+        "total_records": 3,
+        "audit_trail": [
+            {
+                "audit_id": f"AUD-{uuid.uuid4().hex[:6].upper()}",
+                "action": "GRAPH_SUBGRAPH_QUERY",
+                "actor": "Investigator_Agent",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": f"Bounded subgraph fetched for case {case_id}"
+            },
+            {
+                "audit_id": f"AUD-{uuid.uuid4().hex[:6].upper()}",
+                "action": "INSIGHT_FUSION_GENERATED",
+                "actor": "ML_Graph_Engine",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": f"Fused INSIGHT.v1 contract generated for case {case_id}"
+            },
+            {
+                "audit_id": f"AUD-{uuid.uuid4().hex[:6].upper()}",
+                "action": "EVIDENCE_VERIFIED",
+                "actor": "Evidence_Verification_Module",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": "Verified attached bank statements EVID-301 and CDR log EVID-303"
+            }
+        ]
+    }
+
+@app.post("/api/cases/{case_id}/reports/generate", summary="Generate Comprehensive Investigation Report")
+def generate_investigation_report(case_id: str):
+    context = get_copilot_context(case_id=case_id)
+    
+    return {
+        "contract": "REPORT.v1",
+        "report_id": f"REP-{uuid.uuid4().hex[:8].upper()}",
+        "case_id": case_id,
+        "title": f"Criminal Network Investigation & Link Analysis Report — {case_id}",
+        "executive_summary": (
+            f"Investigation for case {case_id} identified a key bridge node entity (E301) "
+            f"linking disconnected suspect sub-networks. High anomaly scores detected in financial transactions "
+            f"(₹1,200,000) and communication frequencies (143 calls/24h)."
+        ),
+        "key_insights": [context["insight"]],
+        "graph_summary": {
+            "node_count": context["graph"]["node_count"],
+            "edge_count": context["graph"]["edge_count"],
+            "key_entities": ["E101 (Mohammed Rahil)", "E301 (Anil Kapoor)"]
+        },
+        "evidence_log": context["evidence"],
+        "recommendations": [
+            "Issue priority subpoena for financial accounts linked to E301.",
+            "Initiate real-time CDR location tracking on target entity E101.",
+            "Hand over INSIGHT.v1 and GRAPH.v1 packages to Copilot RAG assistant for investigator Q&A."
+        ],
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
+
