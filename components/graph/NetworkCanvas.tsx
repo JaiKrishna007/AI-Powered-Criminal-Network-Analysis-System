@@ -10,98 +10,92 @@ import ReactFlow, {
   useEdgesState,
   Handle,
   Position,
-  NodeProps
+  NodeProps,
+  useReactFlow,
+  ReactFlowProvider
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
   User, 
-  Phone, 
-  Coins, 
-  Car, 
+  Building, 
   MapPin, 
-  AlertTriangle,
+  Car, 
+  Coins, 
   Fingerprint,
-  CalendarDays
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  MousePointer,
+  Hand,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { Entity, Relationship } from '@/lib/client-contracts/contracts';
 
-// Custom Node Styling based on Entity Type (Light Theme Console - Overhaul 1)
-const CustomNodeComponent = ({ data }: NodeProps<{ entity: Entity; isSelected?: boolean }>) => {
+// Node configurations matching exact user specs (Overhaul 1)
+const typeConfigs: Record<string, { icon: any; color: string; border: string; bg: string; badge: string }> = {
+  PERSON: { icon: User, color: 'text-[#2563EB]', border: 'border-[#2563EB]', bg: 'bg-[#2563EB]/10', badge: 'bg-[#DBEAFE]' },
+  ORGANIZATION: { icon: Building, color: 'text-[#7C3AED]', border: 'border-[#7C3AED]', bg: 'bg-[#7C3AED]/10', badge: 'bg-[#F3E8FF]' },
+  LOCATION: { icon: MapPin, color: 'text-[#0D9488]', border: 'border-[#0D9488]', bg: 'bg-[#0D9488]/10', badge: 'bg-[#CCFBF1]' },
+  VEHICLE: { icon: Car, color: 'text-[#D97706]', border: 'border-[#D97706]', bg: 'bg-[#D97706]/10', badge: 'bg-[#FEF3C7]' },
+  BANK_ACCOUNT: { icon: Coins, color: 'text-[#CA8A04]', border: 'border-[#CA8A04]', bg: 'bg-[#CA8A04]/10', badge: 'bg-[#FEF9C3]' },
+  EVENT: { icon: Fingerprint, color: 'text-[#64748B]', border: 'border-[#64748B]', bg: 'bg-[#64748B]/10', badge: 'bg-[#F1F5F9]' }
+};
+
+const CustomCircleNode = ({ data }: NodeProps<{ entity: Entity; isSelected?: boolean }>) => {
   const entity = data.entity;
   const isSelected = data.isSelected;
   
-  // Potential Bridge node highlight (Overhaul 1)
+  // Potential Bridge node highlight (Overhaul 2 - Bridge Callout)
   const isBridge = entity.id === 'P004'; 
 
-  const config = useMemo(() => {
-    switch (entity.type) {
-      case 'PERSON':
-        return { icon: User, color: 'text-indigo-600', bg: 'bg-indigo-50/50' };
-      case 'PHONE':
-        return { icon: Phone, color: 'text-cyan-600', bg: 'bg-cyan-50/50' };
-      case 'BANK_ACCOUNT':
-        return { icon: Coins, color: 'text-emerald-600', bg: 'bg-emerald-50/50' };
-      case 'VEHICLE':
-        return { icon: Car, color: 'text-amber-600', bg: 'bg-amber-50/50' };
-      case 'LOCATION':
-        return { icon: MapPin, color: 'text-rose-600', bg: 'bg-rose-50/50' };
-      case 'EVENT':
-        return { icon: CalendarDays, color: 'text-violet-600', bg: 'bg-violet-50/50' };
-      default:
-        return { icon: Fingerprint, color: 'text-slate-600', bg: 'bg-slate-50' };
-    }
-  }, [entity.type]);
-
+  const config = typeConfigs[entity.type] || typeConfigs.EVENT;
   const Icon = config.icon;
 
-  // Active Glow visual properties (Overhaul 1)
-  let nodeStyle = 'border-slate-300 bg-white';
+  let highlightStyle = config.border;
   if (isSelected) {
-    nodeStyle = 'border-[#0891B2] ring-1 ring-[#0891B2] shadow-[0_0_12px_rgba(8,145,178,0.22)]';
+    // Selected node: ring-1 ring-[#0891B2] (Cyan Glow)
+    highlightStyle = 'border-[#0891B2] ring-2 ring-[#0891B2] shadow-[0_0_12px_rgba(8,145,178,0.3)]';
   } else if (isBridge) {
-    nodeStyle = 'border-[#D97706] ring-1 ring-[#D97706]/40 shadow-[0_0_10px_rgba(217,119,6,0.20)]';
+    // Bridge Node: Glowing double-ring outline (Amber/Blue)
+    highlightStyle = 'border-[#F59E0B] ring-4 ring-[#F59E0B]/30 animate-pulse';
   }
 
   return (
-    <div className={`p-2.5 rounded-md border w-52 text-left flex flex-col gap-1.5 transition-all text-slate-800 ${nodeStyle}`}>
+    <div className="relative flex flex-col items-center">
       {/* Handles */}
       <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-1.5 !h-1.5 !border-0" />
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-1.5 !h-1.5 !border-0" />
 
-      {/* Top Monospace Micro-Header (Overhaul 2) */}
-      <div className="flex items-center justify-between text-[8px] font-mono-tech uppercase text-slate-400 border-b border-slate-100 pb-1 shrink-0">
-        <span>{entity.type.replace('_', ' ')}</span>
-        <span className="font-bold">{entity.id}</span>
-      </div>
-
-      {/* Node label and Icon */}
-      <div className="flex items-center gap-2">
-        <div className={`w-7 h-7 rounded flex items-center justify-center border border-slate-200 shrink-0 ${config.bg}`}>
-          <Icon size={14} className={config.color} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-black text-slate-800 truncate">{entity.canonical_name}</p>
-          {entity.aliases && entity.aliases.length > 0 && (
-            <p className="text-[8px] text-slate-400 italic truncate">
-              {entity.aliases.join(', ')}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Attribute values tag (Tabular Monospace - Overhaul 2) */}
-      {(entity.phone_value || entity.account_number || entity.plate_number) && (
-        <div className="bg-slate-50 border border-slate-200/60 rounded-sm px-1.5 py-0.5 text-[8px] font-mono-tech text-slate-600 truncate">
-          {entity.phone_value || entity.account_number || entity.plate_number}
+      {/* Bridge Callout Tag */}
+      {isBridge && (
+        <div className="absolute -top-7 z-10 px-2 py-0.5 rounded-sm bg-[#FFFBEB] border border-[#F59E0B] text-[#B45309] text-[7px] font-bold uppercase tracking-wider font-mono-tech shadow-sm">
+          POTENTIAL BRIDGE ENTITY
         </div>
       )}
+
+      {/* Circular node badge */}
+      <div 
+        className={`w-16 h-16 rounded-full border-2 flex flex-col items-center justify-center p-1.5 text-center transition-all duration-200 select-none shadow-sm hover:scale-105 ${config.bg} ${highlightStyle}`}
+      >
+        <Icon size={16} className={config.color} />
+        <span className="text-[7.5px] font-mono-tech font-bold text-slate-700 mt-0.5 truncate max-w-[55px]">
+          {entity.id}
+        </span>
+      </div>
+
+      {/* Centered Primary Label below Node */}
+      <div className="mt-1 max-w-[90px] text-center">
+        <p className="text-[9px] font-bold text-slate-800 truncate leading-tight">
+          {entity.canonical_name}
+        </p>
+      </div>
     </div>
   );
 };
 
-// Register Custom Node Type
 const nodeTypes = {
-  customNode: CustomNodeComponent
+  circleNode: CustomCircleNode
 };
 
 interface NetworkCanvasProps {
@@ -116,7 +110,7 @@ interface NetworkCanvasProps {
   highlightedEdges?: string[];
 }
 
-export default function NetworkCanvas({
+function InnerFlowCanvas({
   nodes,
   edges,
   truncated,
@@ -129,8 +123,8 @@ export default function NetworkCanvas({
 }: NetworkCanvasProps) {
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
 
-  // Node circular arranger layout to keep nodes organized
   useEffect(() => {
     if (nodes.length === 0) {
       setRfNodes([]);
@@ -138,9 +132,9 @@ export default function NetworkCanvas({
       return;
     }
 
-    const radius = 240;
-    const cx = 300;
-    const cy = 220;
+    const radius = 180;
+    const cx = 250;
+    const cy = 200;
 
     const formattedNodes: Node[] = nodes.map((node, index) => {
       const angle = (index / nodes.length) * 2 * Math.PI;
@@ -149,7 +143,7 @@ export default function NetworkCanvas({
       
       return {
         id: node.id,
-        type: 'customNode',
+        type: 'circleNode',
         data: { 
           entity: node,
           isSelected: selectedNodeId === node.id
@@ -162,6 +156,19 @@ export default function NetworkCanvas({
       const isHighlighted = highlightedEdges.includes(rel.id);
       const isSelected = selectedEdgeId === rel.id;
       
+      // Line style indicating confidence (Overhaul 2 - line styles)
+      // Solid = High (>=0.9), Dashed = Medium (0.75-0.9), Dotted = Low (<0.75)
+      const conf = rel.confidence ?? 1.0;
+      let strokeDasharray = undefined;
+      let confidenceType = 'High';
+      if (conf < 0.75) {
+        strokeDasharray = '2,2'; // Dotted
+        confidenceType = 'Low';
+      } else if (conf < 0.9) {
+        strokeDasharray = '5,5'; // Dashed
+        confidenceType = 'Medium';
+      }
+
       return {
         id: rel.id,
         source: rel.source,
@@ -170,21 +177,22 @@ export default function NetworkCanvas({
         animated: isHighlighted,
         selected: isSelected,
         style: {
-          stroke: isSelected ? '#2563eb' : isHighlighted ? '#0891B2' : '#94a3b8',
+          stroke: isSelected ? '#2563eb' : isHighlighted ? '#0D9488' : '#94a3b8',
           strokeWidth: isSelected ? 2.5 : isHighlighted ? 2.0 : 1.2,
+          strokeDasharray
         },
         labelStyle: {
           fill: '#475569',
-          fontSize: 8,
-          fontWeight: 600,
+          fontSize: 7,
+          fontWeight: 650,
           fontFamily: 'monospace'
         },
-        labelBgPadding: [3, 1],
+        labelBgPadding: [2, 1],
         labelBgBorderRadius: 2,
         labelBgStyle: {
           fill: '#ffffff',
           stroke: '#cbd5e1',
-          strokeWidth: 1
+          strokeWidth: 0.8
         }
       };
     });
@@ -213,16 +221,73 @@ export default function NetworkCanvas({
   };
 
   return (
-    <div className="w-full h-full relative bg-[#F8FAFC]">
-      {/* Explicit styled Bounded View Truncation Badge (FE-T02 / Refinements) */}
+    <div className="w-full h-full relative bg-white">
+      {/* Floating top-left canvas toolbar (Overhaul 2) */}
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+        <button 
+          onClick={() => {}} 
+          className="p-1.5 rounded hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition" 
+          title="Select Mode"
+        >
+          <MousePointer size={13} />
+        </button>
+        <button 
+          onClick={() => {}} 
+          className="p-1.5 rounded hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition" 
+          title="Pan Mode"
+        >
+          <Hand size={13} />
+        </button>
+        <div className="w-[1px] h-4 bg-slate-200 mx-0.5"></div>
+        <button 
+          onClick={() => zoomIn()} 
+          className="p-1.5 rounded hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition" 
+          title="Zoom In"
+        >
+          <ZoomIn size={13} />
+        </button>
+        <button 
+          onClick={() => zoomOut()} 
+          className="p-1.5 rounded hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition" 
+          title="Zoom Out"
+        >
+          <ZoomOut size={13} />
+        </button>
+        <button 
+          onClick={() => fitView({ padding: 0.2 })} 
+          className="p-1.5 rounded hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition" 
+          title="Fit Screen"
+        >
+          <Maximize2 size={13} />
+        </button>
+      </div>
+
+      {/* Bounded View Warning */}
       {truncated && (
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-2.5 py-1.5 rounded bg-white border border-slate-300 text-slate-600 text-[10px] font-bold shadow-sm font-mono-tech">
+        <div className="absolute top-4 right-16 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#FFFBEB] border border-[#F59E0B] text-[#B45309] text-[9px] font-bold shadow-sm font-mono-tech">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
-          <span>⚡ Bounded View: 1–2 Hops</span>
+          <span>⚡ Bounded: 1–2 Hops</span>
         </div>
       )}
 
-      {/* React Flow Render Canvas */}
+      {/* Legend docked bottom-right (Overhaul 2) */}
+      <div className="absolute bottom-4 right-4 z-10 p-3 bg-white border border-slate-200 rounded-lg shadow-sm text-[8.5px] text-slate-600 flex flex-col gap-1.5 max-w-[150px]">
+        <h4 className="font-bold border-b border-slate-100 pb-1 text-slate-700 uppercase font-mono-tech">Legend</h4>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#2563EB]"></span>Person</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#7C3AED]"></span>Org</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#0D9488]"></span>Location</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#D97706]"></span>Vehicle</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#CA8A04]"></span>Account</span>
+        </div>
+        <div className="border-t border-slate-100 pt-1 flex flex-col gap-0.5 font-mono-tech text-[7px] text-slate-400">
+          <div>─ Solid: High Conf</div>
+          <div>╌ Dashed: Med Conf</div>
+          <div>… Dotted: Low Conf</div>
+        </div>
+      </div>
+
+      {/* React Flow Canvas */}
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -236,9 +301,17 @@ export default function NetworkCanvas({
         fitView
         className="w-full h-full"
       >
-        <Controls showInteractive={false} className="z-10" />
-        <Background color="#cbd5e1" gap={20} size={1} />
+        <Controls showInteractive={false} className="!left-auto !right-4 !top-4" />
+        <Background color="#e2e8f0" gap={16} size={1} />
       </ReactFlow>
     </div>
+  );
+}
+
+export default function NetworkCanvas(props: NetworkCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <InnerFlowCanvas {...props} />
+    </ReactFlowProvider>
   );
 }
