@@ -1,3 +1,5 @@
+import { CONFIG } from '../../config.js';
+
 export interface LLMRequest {
   systemPrompt: string;
   userPrompt: string;
@@ -14,25 +16,38 @@ export interface LLMProvider {
 }
 
 /**
- * Production Ollama LLM Provider.
- * Calls local Ollama API at endpoint (default: http://localhost:11434/api/generate).
+ * Production Ollama LLM Provider targeting Qwen3 4B Q4 via local Ollama.
+ * Endpoint default: ${CONFIG.OLLAMA_BASE_URL}/api/generate
+ * Model default: ${CONFIG.OLLAMA_MODEL}
  * Throws explicit service error when Ollama is unreachable or fails.
  * NO SILENT FAKE FALLBACKS IN PRODUCTION.
  */
 export class OllamaLLMProvider implements LLMProvider {
-  private endpoint: string;
+  private baseUrl: string;
   private model: string;
 
-  constructor(endpoint: string = 'http://localhost:11434/api/generate', model: string = 'llama3.2') {
-    this.endpoint = endpoint;
+  constructor(
+    baseUrl: string = CONFIG.OLLAMA_BASE_URL,
+    model: string = CONFIG.OLLAMA_MODEL
+  ) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.model = model;
   }
 
+  public getModelName(): string {
+    return this.model;
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   public async generate(request: LLMRequest): Promise<LLMResponse> {
+    const endpoint = `${this.baseUrl}/api/generate`;
     const prompt = `${request.systemPrompt}\n\n${request.userPrompt}`;
 
     try {
-      const response = await fetch(this.endpoint, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -59,14 +74,14 @@ export class OllamaLLMProvider implements LLMProvider {
         raw: data,
       };
     } catch (err: any) {
-      // Production Rule: Explicit service failure, do NOT fabricate answers or pretend Copilot succeeded.
-      throw new Error(`[OllamaLLMProvider] Mandatory local LLM invocation failed: ${err.message}`);
+      // Mandatory explicit service error handling in production
+      throw new Error(`[OllamaLLMProvider] Mandatory local LLM invocation failed (model: ${this.model}): ${err.message}`);
     }
   }
 }
 
 /**
- * Mock LLM Provider for deterministic automated testing ONLY.
+ * Mock LLM Provider for deterministic unit testing ONLY.
  */
 export class MockLLMProvider implements LLMProvider {
   private mockResponder?: (request: LLMRequest) => string;

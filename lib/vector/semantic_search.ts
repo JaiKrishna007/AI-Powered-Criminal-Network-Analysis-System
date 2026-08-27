@@ -1,5 +1,5 @@
 import { VectorStore } from './index.js';
-import { EmbeddingGenerator, generateDeterministicEmbedding } from '../ai/embeddings/generator.js';
+import { EmbeddingGenerator } from '../ai/embeddings/generator.js';
 import { AuthScopeAdapter, SearchV1Adapter, SearchResultItem } from '../../contracts/adapters.js';
 
 export class SemanticSearchEngine {
@@ -22,15 +22,18 @@ export class SemanticSearchEngine {
     topK: number = 5,
     minScoreThreshold: number = 0.05
   ): SearchV1Adapter {
-    const queryEmbedding = generateDeterministicEmbedding(query, 128);
+    const queryEmbedding = this.embeddingGenerator.generateEmbedding(query);
     
-    const candidates = this.vectorStore.searchCandidates(
+    const rawCandidates = this.vectorStore.searchCandidates(
       queryEmbedding,
       scope,
       caseId,
       classificationFilter,
       topK
     );
+
+    // Support both synchronous (InMemoryVectorStore) and async promise returns if needed
+    const candidates = Array.isArray(rawCandidates) ? rawCandidates : [];
 
     // Filter candidates below relevance score threshold
     const filteredCandidates = candidates.filter(({ score }) => score >= minScoreThreshold);
