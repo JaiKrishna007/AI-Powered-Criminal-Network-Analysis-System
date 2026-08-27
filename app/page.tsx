@@ -1,18 +1,30 @@
 import React from 'react';
-import Link from 'next/link';
 import { 
-  FolderClosed, 
   ShieldAlert, 
   UserCheck, 
-  ChevronRight,
-  TrendingUp,
-  BrainCircuit,
-  Lock
+  FolderClosed 
 } from 'lucide-react';
-import { mockDB } from '@/lib/client-contracts/mockData';
+import { pgPool } from '@/src/db';
+import CaseManagement from '@/components/case/CaseManagement';
 
-export default function LandingPortalPage() {
-  const cases = mockDB.cases;
+export const dynamic = 'force-dynamic';
+
+export default async function LandingPortalPage() {
+  let cases: any[] = [];
+  try {
+    const res = await pgPool.query('SELECT * FROM cases ORDER BY id DESC;');
+    cases = res.rows.map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      owner_id: row.owner_id,
+      classification: row.classification,
+      description: '',
+      created_at: new Date().toISOString()
+    }));
+  } catch (err) {
+    console.error('Failed to fetch cases from database:', err);
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -39,7 +51,7 @@ export default function LandingPortalPage() {
 
           <div className="flex justify-center">
             <div className="flex items-center gap-2 px-3 py-1 rounded bg-red-950/40 border border-red-900/40 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-              <ShieldAlert size={12} className="animate-pulse" />
+              <ShieldAlert size={12} className="shrink-0 animate-pulse" />
               <span>Security Clearance Required: Level-III Restricted</span>
             </div>
           </div>
@@ -57,34 +69,8 @@ export default function LandingPortalPage() {
             </div>
           </div>
 
-          <div className="grid gap-4">
-            {cases.map((c) => (
-              <div 
-                key={c.id} 
-                className="p-5 rounded-2xl glass-card border border-zinc-850 flex items-center justify-between gap-6"
-              >
-                <div className="space-y-2 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-wider">
-                      {c.classification.replace('_', ' ')}
-                    </span>
-                    <span className="text-[9px] font-bold text-zinc-500 font-mono">ID: {c.id}</span>
-                  </div>
-                  <h3 className="text-sm font-bold text-zinc-200 truncate">{c.title}</h3>
-                  <p className="text-xs text-zinc-500 line-clamp-2 max-w-lg leading-relaxed">
-                    {c.description}
-                  </p>
-                </div>
-
-                <Link
-                  href={`/cases/${c.id}`}
-                  className="shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 text-zinc-300 hover:text-white transition shadow shadow-black/25"
-                >
-                  <ChevronRight size={18} />
-                </Link>
-              </div>
-            ))}
-          </div>
+          {/* Interactive Case Management Client Component */}
+          <CaseManagement initialCases={cases} />
         </div>
 
         {/* Portal Footer stats details */}
