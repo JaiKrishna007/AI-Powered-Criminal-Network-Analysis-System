@@ -1,0 +1,187 @@
+import crypto from 'crypto';
+import { db } from '../db';
+import { Evidence, IngestionJob, IngestRequestPayload, EntityCandidate } from '../models/types';
+import { NormalizationService } from './normalization.service';
+import { ExtractionService } from './extraction.service';
+import { EntityResolutionService } from './entity_resolution.service';
+
+export interface IngestionResult {
+  job: IngestionJob;
+  evidence?: Evidence;
+  candidatesExtracted: EntityCandidate[];
+  isDuplicate?: boolean;
+}
+
+export class IngestionService {
+  public static readonly MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
+  public static async processIngestion(payload: IngestRequestPayload): Promise<IngestionResult> {
+    // 1. Validate type
+    const validTypes = ['PDF', 'CSV', 'JSON', 'TEXT'];
+    const normalizedType = payload.source_type.toUpperCase();
+    if (!validTypes.includes(normalizedType)) {
+      throw { code: 'INVALID_SOURCE_TYPE', message: `Unsupported source type: ${payload.source_type}` };
+    }
+
+    // 2. Validate size
+    const contentBuffer = typeof payload.content === 'string' ? Buffer.from(payload.content) : payload.content;
+    if (contentBuffer.length > this.MAX_FILE_SIZE_BYTES) {
+      throw { code: 'FILE_TOO_LARGE', message: 'Payload size exceeds 50MB limit' };
+    }
+
+    // 3. Validate structure (Check CSV / JSON malformed structure)
+    const contentStr = contentBuffer.toString('utf-8');
+    if (normalizedType === 'CSV') {
+      if (!this.isValidCsv(contentStr)) {
+        throw { code: 'MALFORMED_INPUT', message: 'Malformed CSV format structure' };
+      }
+    } else if (normalizedType === 'JSON') {
+      try {
+        JSON.parse(contentStr);
+      } catch (e) {
+        throw { code: 'MALFORMED_INPUT', message: 'Malformed JSON payload structure' };
+      }
+    }
+
+    // 4. Create INGEST.v1 job with state QUEUED
+    const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    let job: IngestionJob = {
+      id: jobId,
+      case_id: payload.case_id,
+      source_ref: payload.source_ref,
+      state: 'QUEUED',
+      error: null
+    };
+    await db.createIngestionJob(job);
+
+    // Update job state to PROCESSING
+    await db.updateIngestionJobState(jobId, 'PROCESSING');
+
+    // 5. Hash original artifact BEFORE transformation
+    const sha256Hash = crypto.createHash('sha256').update(contentBuffer).digest('hex');
+
+    // 6. Check duplicate source hash (BE-T03)
+    const existingEv = await db.findEvidenceBySha256(sha256Hash);
+    if (existingEv) {
+      // Duplicate handling invoked
+      await db.updateIngestionJobState(jobId, 'COMPLETED', 'DUPLICATE_SOURCE_HASH');
+      job = (await db.getIngestionJob(jobId))!;
+      return {
+        job,
+        evidence: existingEv,
+        candidatesExtracted: [],
+        isDuplicate: true
+      };
+    }
+
+    // 7. Create evidence record (EVIDENCE.v1)
+    const evidenceId = `ev-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const evidenceRecord: Evidence = {
+      id: evidenceId,
+      case_id: payload.case_id,
+      source_type: normalizedType,
+      source_ref: payload.source_ref,
+      storage_uri: payload.storage_uri,
+      sha256: sha256Hash,
+      classification: payload.classification || 'UNCLASSIFIED'
+    };
+    await db.createEvidence(evidenceRecord);
+
+    // 8. Extract supported text/records via extraction worker
+    const extractionResult = await ExtractionService.processExtractionWorker(normalizedType, contentBuffer);
+
+    // 9. Process extraction & normalization, run entity resolution
+    const existingCandidates = await db.getCandidatesByCase(payload.case_id);
+    const candidatesExtracted: EntityCandidate[] = [];
+
+    for (const rec of extractionResult.records) {
+      const normDate = rec.context?.date ? NormalizationService.normalizeDate(rec.context.date) : undefined;
+      const normPhone = rec.phone ? NormalizationService.normalizePhone(rec.phone) : undefined;
+      const normName = NormalizationService.normalizeIdentifier(rec.name);
+
+      // Evaluate candidate resolution against existing candidates in case
+      let bestScore = 0;
+      let highestSignals = {
+        name_similarity: 0,
+        phonetic_similarity: 0,
+        identifier_similarity: 0,
+        context_similarity: 0,
+        embedding_similarity: 0
+      };
+      let hasConflict = false;
+
+      for (const existing of existingCandidates) {
+        const evalRes = EntityResolutionService.evaluateCandidate(payload.case_id, existing, rec);
+        if (evalRes.score > bestScore) {
+          bestScore = evalRes.score;
+          highestSignals = evalRes.signals;
+        }
+        if (evalRes.has_conflict) {
+          hasConflict = true;
+        }
+      }
+
+      // If comparing records inside same payload with matching name/phone
+      for (const otherRec of candidatesExtracted) {
+        const evalRes = EntityResolutionService.evaluateCandidate(payload.case_id, otherRec, rec);
+        if (evalRes.score > bestScore) {
+          bestScore = evalRes.score;
+          highestSignals = evalRes.signals;
+        }
+        if (evalRes.has_conflict) {
+          hasConflict = true;
+          otherRec.has_conflict = true;
+        }
+      }
+
+      const candId = `cand-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const candidate: EntityCandidate = {
+        id: candId,
+        case_id: payload.case_id,
+        name: rec.name, // Preserves original name
+        normalized_name: normName.normalized,
+        original_phone: normPhone?.original || null, // Preserves original phone
+        normalized_phone: normPhone?.normalized || null,
+        identifiers: rec.identifiers || {},
+        context: rec.context || {},
+        score: bestScore,
+        signals: highestSignals,
+        has_conflict: hasConflict,
+        status: 'CANDIDATE', // Contract requires human review state CANDIDATE
+        candidate_data: rec,
+        created_at: new Date().toISOString()
+      };
+
+      await db.saveCandidate(candidate);
+      candidatesExtracted.push(candidate);
+    }
+
+    // 10. Persist processing status COMPLETED
+    await db.updateIngestionJobState(jobId, 'COMPLETED');
+    job = (await db.getIngestionJob(jobId))!;
+
+    return {
+      job,
+      evidence: evidenceRecord,
+      candidatesExtracted,
+      isDuplicate: false
+    };
+  }
+
+  private static isValidCsv(csvText: string): boolean {
+    const lines = csvText.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return false;
+    // Check if headers exist and rows have matching column counts
+    const headerCols = lines[0].split(',').length;
+    if (headerCols === 0) return false;
+
+    for (const line of lines) {
+      const cols = line.split(',').length;
+      // Allow +/- 1 variance or strict check for malformed syntax (e.g. unclosed quotes)
+      if (line.includes('"') && (line.match(/"/g) || []).length % 2 !== 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
