@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { 
-  ListTodo, 
   AlertTriangle, 
   Clock, 
   CheckCircle, 
@@ -27,90 +26,89 @@ export default function LeadCard({
   const priorityColor = React.useMemo(() => {
     switch (lead.priority) {
       case 'HIGH':
-        return 'text-rose-400 bg-rose-950/30 border-rose-900/50';
+        return 'text-rose-700 bg-rose-50 border-rose-200';
       case 'MEDIUM':
-        return 'text-amber-400 bg-amber-950/30 border-amber-900/50';
+        return 'text-amber-700 bg-amber-50 border-amber-200';
       case 'LOW':
-        return 'text-zinc-400 bg-zinc-950 border-zinc-800';
+        return 'text-slate-700 bg-slate-50 border-slate-200';
       default:
-        return 'text-zinc-400 bg-zinc-950 border-zinc-800';
+        return 'text-slate-700 bg-slate-50 border-slate-200';
     }
   }, [lead.priority]);
 
   const handleStatusSelect = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value as Lead['status'];
     setUpdating(true);
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     onStatusChange(lead.id, val);
     setUpdating(false);
   };
 
   return (
-    <div className={`p-4 rounded-xl glass-card flex flex-col gap-3.5 border border-zinc-850 hover:border-zinc-700/60`}>
+    <div className="p-4 rounded-md border border-slate-350 bg-white flex flex-col gap-3 shadow-sm hover:border-slate-400 transition">
       {/* Header Info */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase border ${priorityColor}`}>
+            <span className={`px-2 py-0.5 rounded-sm text-[8px] font-bold uppercase border font-mono-tech ${priorityColor}`}>
               {lead.priority} Priority
             </span>
             {lead.relevance_score && (
-              <span className="text-[10px] font-bold text-indigo-400">
-                Score: {Math.round(lead.relevance_score * 100)}%
+              <span className="text-[10px] font-bold text-blue-600 font-mono-tech">
+                RELEVANCE: {Math.round(lead.relevance_score * 100)}%
               </span>
             )}
           </div>
-          <h3 className="text-xs font-bold text-zinc-100 leading-snug mt-1">{lead.title}</h3>
+          <h3 className="text-xs font-bold text-slate-800 leading-snug mt-1 font-sans">{lead.title}</h3>
         </div>
-        <div className="shrink-0 flex items-center gap-1">
+        <div className="shrink-0 flex items-center gap-1.5">
           {updating ? (
-            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
           ) : lead.status === 'COMPLETED' ? (
-            <CheckCircle size={14} className="text-emerald-400" />
+            <CheckCircle size={14} className="text-emerald-600" />
           ) : lead.status === 'IN_PROGRESS' ? (
-            <Clock size={14} className="text-indigo-400" />
+            <Clock size={14} className="text-blue-600 font-bold" />
           ) : lead.status === 'DISMISSED' ? (
-            <Trash2 size={14} className="text-zinc-500" />
+            <Trash2 size={14} className="text-slate-400" />
           ) : (
-            <AlertTriangle size={14} className="text-zinc-400" />
+            <AlertTriangle size={14} className="text-slate-500" />
           )}
         </div>
       </div>
 
-      {/* Rationale details */}
-      <p className="text-xs text-zinc-400 leading-normal">
+      {/* Rationale detail */}
+      <p className="text-xs text-slate-600 leading-normal font-sans">
         {lead.rationale}
       </p>
 
-      {/* Actions & Status Dropdown */}
-      <div className="flex items-center justify-between gap-4 pt-3.5 border-t border-zinc-850">
-        {/* Evidence Links */}
+      {/* Actions and citations */}
+      <div className="flex items-center justify-between gap-4 pt-3 border-t border-slate-100 shrink-0">
+        {/* Monospace citations */}
         <div className="flex items-center gap-1 flex-wrap">
           {lead.evidence_ids.map((evId) => (
             <button
               key={evId}
               onClick={() => onSelectEvidence(evId)}
-              className="flex items-center gap-0.5 px-2 py-0.5 rounded bg-zinc-950 border border-zinc-850 hover:bg-zinc-900 text-[10px] text-zinc-400 font-bold hover:text-zinc-200 transition"
+              className="flex items-center gap-0.5 px-2 py-0.5 rounded-sm bg-slate-50 border border-slate-300 hover:bg-slate-100 text-[10px] text-slate-600 font-mono-tech transition"
             >
-              <FileText size={10} />
+              <FileText size={10} className="text-slate-400" />
               <span>{evId}</span>
             </button>
           ))}
         </div>
 
-        {/* Change Status Dropdown */}
+        {/* Status Dropdown */}
         <div>
           <select
             value={lead.status}
             onChange={handleStatusSelect}
             disabled={updating}
-            className="px-2 py-1 rounded text-[10px] font-bold bg-zinc-950 border border-zinc-800 text-zinc-300 focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+            className="px-2 py-1 rounded-sm text-[9px] font-bold bg-slate-50 border border-slate-300 text-slate-700 focus:outline-none focus:border-blue-500 transition cursor-pointer font-mono-tech"
           >
-            <option value="PENDING_REVIEW">Pending Review</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="DISMISSED">Dismissed</option>
+            <option value="PENDING_REVIEW">PENDING_REVIEW</option>
+            <option value="IN_PROGRESS">IN_PROGRESS</option>
+            <option value="COMPLETED">COMPLETED</option>
+            <option value="DISMISSED">DISMISSED</option>
           </select>
         </div>
       </div>
