@@ -128,10 +128,11 @@ router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req
       classification
     });
 
-    return res.status(202).json({
-      status: 'QUEUED',
+    return res.status(200).json({
+      status: 'SUCCESS',
       job: result.job,
       evidence: result.evidence,
+      candidates: result.candidatesExtracted,
       is_duplicate: result.isDuplicate || false
     });
   } catch (err: any) {

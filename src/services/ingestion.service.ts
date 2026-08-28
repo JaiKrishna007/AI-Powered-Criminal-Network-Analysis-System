@@ -161,14 +161,44 @@ export class IngestionService {
 
         const candId = `CAND-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const candidate: EntityCandidate = {
-          id: candId, case_id: payload.case_id, name: rec.name, normalized_name: normName.normalized,
-          original_phone: normPhone?.original || null, normalized_phone: normPhone?.normalized || null,
-          identifiers: rec.identifiers || {}, context: rec.context || {}, score: bestScore, signals: highestSignals,
-          has_conflict: hasConflict, status: 'CANDIDATE', candidate_data: rec, created_at: new Date().toISOString()
+          id: candId,
+          case_id: payload.case_id,
+          name: rec.name,
+          normalized_name: normName.normalized,
+          original_phone: normPhone?.original || null,
+          normalized_phone: normPhone?.normalized || null,
+          identifiers: rec.identifiers || {},
+          context: rec.context || {},
+          score: bestScore,
+          signals: highestSignals,
+          has_conflict: hasConflict,
+          status: 'CANDIDATE',
+          candidate_data: rec,
+          created_at: new Date().toISOString()
         };
 
         await db.saveCandidate(candidate);
         candidatesExtracted.push(candidate);
+      }
+
+      // Publish extracted relationships to D4 (Graph Service / Neo4j)
+      if (extractionResult.relationships && extractionResult.relationships.length > 0) {
+        try {
+          const authCtx = {
+            user_id: 'SYSTEM',
+            role: 'SYSTEM',
+            case_id: payload.case_id,
+            access_level: 'ADMIN'
+          };
+          const { GraphClient } = await import('./graph_client.js');
+          await GraphClient.fetchD4('/relationships/batch', authCtx, {
+            case_id: payload.case_id,
+            evidence_id: evidenceId,
+            relationships: extractionResult.relationships
+          }, 5000);
+        } catch (err: any) {
+          console.warn(`Failed to publish extracted relationships to D4: ${err.message}`);
+        }
       }
 
       await db.updateIngestionJobState(jobId, 'COMPLETED');

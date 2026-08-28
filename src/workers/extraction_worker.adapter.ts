@@ -119,6 +119,35 @@ export class DefaultExtractionWorker implements IExtractionWorker {
         }
       }
 
+      // Explicit relationship regexes
+      const calledMatches = rawText.match(/(?:Called|CallTo|Dialed):\s*([\d\-\+\s]+)/gi) || [];
+      const transferMatches = rawText.match(/(?:TransferredMoney|TransferTo|AmountTo):\s*([A-Za-z0-9\-]+)/gi) || [];
+      const metAtMatches = rawText.match(/(?:MetAt|MeetingAt):\s*([A-Za-z0-9\s,\.]+)/gi) || [];
+
+      for (const callStr of calledMatches) {
+        const targetPhone = callStr.split(':')[1].trim();
+        records.push({ name: targetPhone, type: 'PHONE' });
+        if (mainPersons.length > 0) {
+          relationships.push({ source_name: mainPersons[0], target_name: targetPhone, type: 'CALLED' });
+        }
+      }
+
+      for (const tStr of transferMatches) {
+        const targetAcc = tStr.split(':')[1].trim();
+        records.push({ name: targetAcc, type: 'ACCOUNT' });
+        if (mainPersons.length > 0) {
+          relationships.push({ source_name: mainPersons[0], target_name: targetAcc, type: 'TRANSFERRED_MONEY' });
+        }
+      }
+
+      for (const mStr of metAtMatches) {
+        const loc = mStr.split(':')[1].trim();
+        records.push({ name: loc, type: 'LOCATION' });
+        if (mainPersons.length > 0) {
+          relationships.push({ source_name: mainPersons[0], target_name: loc, type: 'MET_AT' });
+        }
+      }
+
       // Document tracking spans
       source_spans.push({ type: 'DOCUMENT_START', value: 'START', index: 0, length: 0 });
 
@@ -147,49 +176,74 @@ export class DefaultExtractionWorker implements IExtractionWorker {
           const row = r as any;
           const name = row.Name || row.name || row.Person || row.person || row.Accused || row.Suspect || row.Target;
           const phone = row.Phone || row.phone || row.Mobile || row.mobile || row.Telephone;
+          const calledPhone = row.Called || row.called || row.Callee || row.Dialed;
           const imei = row.IMEI || row.imei || row.Device || row.Handset;
           const account = row.Account || row.account || row.BankAccount || row.AccNo || row.AccountNumber;
+          const transferTo = row.TransferTo || row.transfer_to || row.TransferredMoney;
           const vehicle = row.Vehicle || row.vehicle || row.Car || row.Plate || row.RegNo;
           const location = row.Location || row.location || row.Address || row.Place;
+          const metAt = row.MetAt || row.met_at || row.MeetingLocation;
           const organization = row.Organization || row.organization || row.Company || row.Gang || row.Syndicate;
           const caseRef = row.Case || row.case || row.CaseId || row.FIR || row.CrimeNo;
           const event = row.Event || row.event || row.Incident || row.Transaction;
           
-          if (name) {
-            records.push({ name: name.trim(), phone: phone ? phone.trim() : undefined, type: 'PERSON' });
+          const primaryName = name ? name.trim() : undefined;
+
+          if (primaryName) {
+            records.push({ name: primaryName, phone: phone ? phone.trim() : undefined, type: 'PERSON' });
           }
           if (phone) {
             records.push({ name: phone.trim(), type: 'PHONE' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: phone.trim(), type: 'USED' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: phone.trim(), type: 'USED' });
+          }
+          if (calledPhone) {
+            records.push({ name: calledPhone.trim(), type: 'PHONE' });
+            if (primaryName) {
+              relationships.push({ source_name: primaryName, target_name: calledPhone.trim(), type: 'CALLED' });
+            } else if (phone) {
+              relationships.push({ source_name: phone.trim(), target_name: calledPhone.trim(), type: 'CALLED' });
+            }
           }
           if (imei) {
             records.push({ name: imei.trim(), type: 'IMEI' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: imei.trim(), type: 'USED_DEVICE' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: imei.trim(), type: 'USED_DEVICE' });
           }
           if (account) {
             records.push({ name: account.trim(), type: 'ACCOUNT' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: account.trim(), type: 'OWNS_ACCOUNT' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: account.trim(), type: 'OWNS_ACCOUNT' });
+          }
+          if (transferTo) {
+            records.push({ name: transferTo.trim(), type: 'ACCOUNT' });
+            if (primaryName) {
+              relationships.push({ source_name: primaryName, target_name: transferTo.trim(), type: 'TRANSFERRED_MONEY' });
+            } else if (account) {
+              relationships.push({ source_name: account.trim(), target_name: transferTo.trim(), type: 'TRANSFERRED_MONEY' });
+            }
           }
           if (vehicle) {
             records.push({ name: vehicle.trim(), type: 'VEHICLE' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: vehicle.trim(), type: 'OPERATES' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: vehicle.trim(), type: 'OPERATES' });
           }
           if (location) {
             records.push({ name: location.trim(), type: 'LOCATION' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: location.trim(), type: 'VISITED' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: location.trim(), type: 'VISITED' });
+          }
+          if (metAt) {
+            records.push({ name: metAt.trim(), type: 'LOCATION' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: metAt.trim(), type: 'MET_AT' });
           }
           if (organization) {
             records.push({ name: organization.trim(), type: 'ORGANIZATION' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: organization.trim(), type: 'MEMBER_OF' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: organization.trim(), type: 'MEMBER_OF' });
           }
           if (caseRef) {
             records.push({ name: caseRef.trim(), type: 'CASE' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: caseRef.trim(), type: 'INVOLVED_IN' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: caseRef.trim(), type: 'INVOLVED_IN' });
           }
           if (event) {
             events.push({ name: event.trim() });
             records.push({ name: event.trim(), type: 'EVENT' });
-            if (name) relationships.push({ source_name: name.trim(), target_name: event.trim(), type: 'LINKED_TO' });
+            if (primaryName) relationships.push({ source_name: primaryName, target_name: event.trim(), type: 'LINKED_TO' });
           }
         }
       } catch (err) {

@@ -167,6 +167,14 @@ function createD4App() {
     });
   });
 
+  app.post('/relationships/batch', (req: Request, res: Response) => {
+    const { relationships } = req.body || {};
+    res.status(200).json({
+      status: 'SUCCESS',
+      published_count: (relationships || []).length
+    });
+  });
+
   const handleRelationship = (req: Request, res: Response) => {
     const id = req.params.id || req.body?.relationshipId || 'REL-001';
     res.status(200).json({

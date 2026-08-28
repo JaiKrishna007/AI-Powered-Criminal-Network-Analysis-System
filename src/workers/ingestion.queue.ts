@@ -92,6 +92,26 @@ export const startIngestionWorker = () => {
         candidatesExtracted.push(candidate);
       }
 
+      // Publish extracted relationships to D4 (Graph Service / Neo4j)
+      if (extractionResult.relationships && extractionResult.relationships.length > 0) {
+        try {
+          const authCtx = {
+            user_id: 'SYSTEM',
+            role: 'SYSTEM',
+            case_id: caseId,
+            access_level: 'ADMIN'
+          };
+          const { GraphClient } = await import('../services/graph_client.js');
+          await GraphClient.fetchD4('/relationships/batch', authCtx, {
+            case_id: caseId,
+            evidence_id: evidenceId,
+            relationships: extractionResult.relationships
+          }, 5000);
+        } catch (err: any) {
+          console.warn(`Failed to publish extracted relationships to D4: ${err.message}`);
+        }
+      }
+
       await db.updateIngestionJobState(jobId, 'COMPLETED');
     } catch (error: any) {
       await db.updateIngestionJobState(jobId, 'FAILED', error.message);

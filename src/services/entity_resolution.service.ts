@@ -64,6 +64,7 @@ export class EntityResolutionService {
     signals: EntitySignals;
     has_conflict: boolean;
     auto_merge_allowed: boolean;
+    review_recommendation?: string;
     ml_status: 'AVAILABLE' | 'UNAVAILABLE';
   }> {
     
@@ -99,10 +100,20 @@ export class EntityResolutionService {
     const embSim = this.computeEmbeddingSimilarity(existingRecord.name, newRecord.name);
 
     if (mlStatus === 'UNAVAILABLE' || !mlResponse) {
-      // Contract: Never fabricate probability = 0.5.
-      // Retain unresolved state (score 0), compute deterministic signals, and require human review.
+      // Use documented deterministic transparent formula when ML is unavailable
+      let deterministicScore = 
+        0.30 * nameSim +
+        0.15 * phoneSim +
+        0.20 * identifierSim +
+        0.15 * contextSim +
+        0.20 * embSim;
+
+      if (hasConflict) {
+        deterministicScore *= 0.5;
+      }
+
       return {
-        score: 0.0,
+        score: Number(deterministicScore.toFixed(4)),
         signals: {
           name_similarity: nameSim,
           phonetic_similarity: phoneSim,
@@ -112,6 +123,7 @@ export class EntityResolutionService {
         },
         has_conflict: hasConflict,
         auto_merge_allowed: false,
+        review_recommendation: hasConflict ? 'CONFLICT_WARNING' : 'REVIEW_REQUIRED',
         ml_status: 'UNAVAILABLE'
       };
     }
@@ -120,11 +132,17 @@ export class EntityResolutionService {
 
     // Apply conflict penalty if contradictory identity data exists
     if (hasConflict) {
-      totalScore *= 0.5; // Penalty
+      totalScore *= 0.5; // Conflict penalty
     }
 
-    // Auto merge is explicitly blocked if conflict exists
-    const autoMergeAllowed = !hasConflict && totalScore >= 0.90;
+    // Strict Human-In-The-Loop: auto_merge_allowed is always false for MVP.
+    // High confidence indicates REVIEW_RECOMMENDED, but human supervisor/investigator approval is mandatory.
+    const autoMergeAllowed = false;
+    const reviewRecommendation = hasConflict
+      ? 'CONFLICT_WARNING'
+      : totalScore >= 0.85
+      ? 'REVIEW_RECOMMENDED'
+      : 'REVIEW_REQUIRED';
 
     return {
       score: Number(totalScore.toFixed(4)),
@@ -137,6 +155,7 @@ export class EntityResolutionService {
       },
       has_conflict: hasConflict,
       auto_merge_allowed: autoMergeAllowed,
+      review_recommendation: reviewRecommendation,
       ml_status: 'AVAILABLE'
     };
   }
