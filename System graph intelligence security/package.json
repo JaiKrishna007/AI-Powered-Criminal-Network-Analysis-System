@@ -1,0 +1,20 @@
+{
+  "name": "netra-graph-trust",
+  "version": "1.0.0",
+  "description": "NETRA / PS 26189 — Developer 4: Graph / Trust Module",
+  "main": "workers/analytics.ts",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "neo4j-driver": "^5.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
