@@ -173,11 +173,13 @@ router.post('/:case_id/entities/resolve', AuthMiddleware.requireCaseAccess, asyn
 
 // Helper for AI/Graph auth context reading actual case access level from DB
 const buildAuthContext = async (req: AuthenticatedRequest & { correlationId?: string }, caseId: string) => {
+  const { getEffectiveRole } = await import('../utils/security.js');
   const member = await db.getCaseMember(caseId, req.user!.id);
   const accessLevel = member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');
+  const role = getEffectiveRole(req.user!.roles);
   return {
     user_id: req.user!.id,
-    role: req.user!.roles[0],
+    role,
     case_id: caseId,
     access_level: accessLevel,
     correlation_id: req.correlationId

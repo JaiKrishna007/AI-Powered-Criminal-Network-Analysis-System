@@ -134,12 +134,20 @@ export class IngestionService {
         let bestScore = 0;
         let highestSignals = { name_similarity: 0, phonetic_similarity: 0, identifier_similarity: 0, context_similarity: 0, embedding_similarity: 0 };
         let hasConflict = false;
+        let candidateMLStatus: 'AVAILABLE' | 'UNAVAILABLE' = 'AVAILABLE';
+        let candidateMLProbability: number | null = null;
+        let candidateDeterministicScore = 0;
+        let candidateReviewRecommendation: string = 'REVIEW_REQUIRED';
 
         for (const existing of existingCandidates) {
           const evalRes = await EntityResolutionService.evaluateCandidate(payload.case_id, existing, rec);
           if (evalRes.score > bestScore) {
             bestScore = evalRes.score;
             highestSignals = evalRes.signals;
+            candidateMLStatus = evalRes.ml_status;
+            candidateMLProbability = evalRes.ml_probability;
+            candidateDeterministicScore = evalRes.deterministic_score;
+            candidateReviewRecommendation = evalRes.review_recommendation || 'REVIEW_REQUIRED';
           }
           if (evalRes.has_conflict) {
             hasConflict = true;
@@ -152,6 +160,10 @@ export class IngestionService {
           if (evalRes.score > bestScore) {
             bestScore = evalRes.score;
             highestSignals = evalRes.signals;
+            candidateMLStatus = evalRes.ml_status;
+            candidateMLProbability = evalRes.ml_probability;
+            candidateDeterministicScore = evalRes.deterministic_score;
+            candidateReviewRecommendation = evalRes.review_recommendation || 'REVIEW_REQUIRED';
           }
           if (evalRes.has_conflict) {
             hasConflict = true;
@@ -170,6 +182,10 @@ export class IngestionService {
           identifiers: rec.identifiers || {},
           context: rec.context || {},
           score: bestScore,
+          deterministic_score: candidateDeterministicScore || bestScore,
+          ml_probability: candidateMLProbability,
+          ml_status: candidateMLStatus,
+          review_recommendation: candidateReviewRecommendation,
           signals: highestSignals,
           has_conflict: hasConflict,
           status: 'CANDIDATE',

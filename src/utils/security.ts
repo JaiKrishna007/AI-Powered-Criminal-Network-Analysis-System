@@ -45,3 +45,17 @@ export function verifyAuthContext(contextStr: string, signatureStr: string): boo
     return false;
   }
 }
+
+/**
+ * Deterministically resolves the highest-priority effective role from a user's roles array.
+ * Priority: SYSTEM ADMIN > SUPERVISOR > INVESTIGATOR > ANALYST > OFFICER
+ */
+export function getEffectiveRole(roles: string[] = []): string {
+  if (!roles || roles.length === 0) return 'INVESTIGATOR';
+  if (roles.includes('SYSTEM ADMIN')) return 'SYSTEM ADMIN';
+  if (roles.includes('SUPERVISOR')) return 'SUPERVISOR';
+  if (roles.includes('INVESTIGATOR')) return 'INVESTIGATOR';
+  if (roles.includes('ANALYST')) return 'ANALYST';
+  return roles[0] || 'INVESTIGATOR';
+}
+

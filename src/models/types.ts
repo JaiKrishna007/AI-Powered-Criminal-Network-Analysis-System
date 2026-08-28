@@ -78,6 +78,9 @@ export interface EntityCandidate {
   has_conflict: boolean;
   status: ReviewState;
   ml_status?: 'AVAILABLE' | 'UNAVAILABLE';
+  ml_probability?: number | null;
+  deterministic_score?: number;
+  review_recommendation?: string;
   sync_state?: SyncState;
   candidate_data: any;
   created_at: string;

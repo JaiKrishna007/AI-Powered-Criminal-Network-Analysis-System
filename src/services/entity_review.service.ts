@@ -31,9 +31,9 @@ export class EntityReviewService {
     });
 
     const userRoles = await db.getUserRoles(reviewerId);
-    const hasReviewRole = userRoles.some(r => ['INVESTIGATOR', 'SUPERVISOR', 'SYSTEM ADMIN'].includes(r));
+    const hasReviewRole = userRoles.some(r => ['INVESTIGATOR', 'SUPERVISOR'].includes(r));
     if (!hasReviewRole) {
-      throw new Error('User lacks reviewer privileges');
+      throw new Error('User lacks reviewer privileges: Requires INVESTIGATOR or SUPERVISOR role');
     }
 
     let initialSyncState: SyncState | undefined = decision === 'ACCEPTED' ? 'SYNC_PENDING' : undefined;
@@ -99,13 +99,10 @@ export class EntityReviewService {
       return (await db.getEntityReview(candidateId))!;
     }
 
-    // Dynamic reviewer role and case access level resolution (Issue 5)
+    // Dynamic reviewer role and case access level resolution (Issue 5 & Issue 14)
+    const { getEffectiveRole } = await import('../utils/security.js');
     const userRoles = await db.getUserRoles(reviewerId);
-    const effectiveRole = userRoles.includes('SUPERVISOR')
-      ? 'SUPERVISOR'
-      : userRoles.includes('SYSTEM ADMIN')
-      ? 'SYSTEM ADMIN'
-      : 'INVESTIGATOR';
+    const effectiveRole = getEffectiveRole(userRoles);
 
     const caseMember = await db.getCaseMember(candidate.case_id, reviewerId);
     const accessLevel = caseMember?.access_level || (userRoles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');

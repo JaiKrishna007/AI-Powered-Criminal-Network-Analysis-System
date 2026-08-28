@@ -3,7 +3,7 @@ import { verifyAuthContext } from '../utils/security';
 
 const serviceType = process.argv[2] || process.env.SERVICE_TYPE || 'all';
 
-function authVerificationMiddleware(req: Request, res: Response, next: NextFunction) {
+export function requireValidInternalAuth(req: Request, res: Response, next: NextFunction) {
   if (req.path === '/health') return next();
 
   const contextStr = (req.headers['x-authorization-context'] as string) || '';
@@ -23,7 +23,7 @@ function authVerificationMiddleware(req: Request, res: Response, next: NextFunct
 export function createMLApp() {
   const app = express();
   app.use(express.json());
-  app.use(authVerificationMiddleware);
+  app.use(requireValidInternalAuth);
 
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', service: 'ml_service' });
@@ -61,7 +61,7 @@ export function createMLApp() {
 export function createD3App() {
   const app = express();
   app.use(express.json());
-  app.use(authVerificationMiddleware);
+  app.use(requireValidInternalAuth);
 
   app.get('/health', async (_req: Request, res: Response) => {
     const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
@@ -120,7 +120,7 @@ export function createD3App() {
 export function createD4App() {
   const app = express();
   app.use(express.json());
-  app.use(authVerificationMiddleware);
+  app.use(requireValidInternalAuth);
 
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', service: 'd4_service' });

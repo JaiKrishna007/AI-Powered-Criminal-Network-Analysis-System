@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
 import { db } from '../db';
-import { Report } from '../models/types';
+import { Report, Case } from '../models/types';
 import { AuthContext, AIClient } from './ai_client';
 import { GraphClient } from './graph_client';
 import { EvidenceService } from './evidence.service';
@@ -66,17 +66,21 @@ export class ReportService {
       created_at: new Date().toISOString()
     };
 
-    // Attempt creation with optimistic retry on race condition
+    // Attempt creation with optimistic retry on race condition (Issue 15)
     let created = false;
     let attempts = 0;
-    while (!created && attempts < 3) {
+    while (!created && attempts < 5) {
       try {
+        const currentReports = await db.getReportsByCase(caseId);
+        if (currentReports.length > 0) {
+          const maxVersion = Math.max(...currentReports.map((r: any) => r.version || 1));
+          version = maxVersion + 1;
+        }
         report.version = version;
         report = await db.createReport(report);
         created = true;
       } catch (err: any) {
         if (err.code === 11000 || err.message?.includes('Duplicate report version')) {
-          version++;
           attempts++;
         } else {
           throw err;
@@ -126,17 +130,20 @@ export class ReportService {
       }
     }
 
-    return (await db.getReport(reportId)) || report;
+    return report;
   }
 
+  /**
+   * Directly compiles the PDF report with authentic forensic sections.
+   */
   public static async compileReportDirectly(
     reportId: string,
-    caseObj: any,
+    caseObj: Case,
     filePath: string,
     authCtx: AuthContext,
     version: number,
-    params: any
-  ) {
+    params?: any
+  ): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       try {
         const doc = new PDFDocument({ margin: 50 });
@@ -154,10 +161,27 @@ export class ReportService {
 
         writeStream.on('finish', async () => {
           try {
-            await db.updateReport(reportId, {
-              status: 'COMPLETED',
-              storage_uri: `local://${path.basename(filePath)}`
-            });
+            // Verify file exists on disk (Issue 16)
+            if (!fs.existsSync(filePath)) {
+              throw new Error(`Compiled PDF report file not found on disk at ${filePath}`);
+            }
+
+            // Retry DB update up to 3 times to ensure status reconciliation (Issue 16)
+            let updated = false;
+            let retry = 0;
+            while (!updated && retry < 3) {
+              try {
+                await db.updateReport(reportId, {
+                  status: 'COMPLETED',
+                  storage_uri: `local://${path.basename(filePath)}`
+                });
+                updated = true;
+              } catch (dbErr) {
+                retry++;
+                if (retry >= 3) throw dbErr;
+                await new Promise(r => setTimeout(r, 100));
+              }
+            }
             resolve(filePath);
           } catch (dbErr) {
             reject(dbErr);
@@ -189,11 +213,11 @@ export class ReportService {
             // Section 2: Investigation Scope
             doc.fontSize(14).text('2. Investigation Scope', { underline: true });
             doc.moveDown(0.3);
-            doc.fontSize(10).text(caseObj.description || 'Targeted criminal network analysis for active law enforcement inquiry.');
+            doc.fontSize(10).text((caseObj as any).description || 'Targeted criminal network analysis for active law enforcement inquiry.');
             doc.text(`Classification Level: ${caseObj.classification}`);
             doc.moveDown();
 
-            // Section 3: Data Sources (Issue 8: Authorized Evidence by Clearance)
+            // Section 3: Data Sources
             const user = await db.getUser(authCtx.user_id);
             const userClearance = user?.clearance_level ?? 2;
             const userRoles = await db.getUserRoles(authCtx.user_id);
@@ -237,44 +261,49 @@ export class ReportService {
 
             // Section 6: Focused Graph Snapshot & Topology Visual (Issues 11 & 12)
             doc.addPage();
-            doc.fontSize(14).text('6. Focused Graph Topology & Visual Snapshot', { underline: true });
+            doc.fontSize(14).text('6. Focused Network Topology Visual', { underline: true });
             doc.moveDown(0.3);
             try {
-              const graphData = await GraphClient.getFocusedGraph(authCtx, 'SEED', 2);
+              const graphData = await GraphClient.getFocusedGraph(authCtx, 'ENT-ROOT', 2);
               const nodes = graphData?.nodes || [];
               const edges = graphData?.edges || [];
 
               if (nodes.length === 0) {
                 analysisStatus.graph = 'EMPTY';
-                doc.fontSize(10).fillColor('#64748B').text('No graph nodes or topological entities discovered for this case.');
+                doc.fontSize(10).fillColor('#64748B').text('No connected nodes identified for focused graph topology.');
                 doc.fillColor('#000000');
               } else {
                 analysisStatus.graph = 'AVAILABLE';
-                doc.fontSize(10).text(`Total Discovered Nodes: ${nodes.length}`);
-                doc.text(`Total Discovered Edges: ${edges.length}`);
+                const renderNodes = nodes.slice(0, 8);
+
+                doc.fontSize(10).text(`Rendered Subgraph Topology: Displaying ${renderNodes.length} verified nodes and ${edges.length} relational edges.`);
                 doc.moveDown(0.5);
 
-                // Render vector graph visual only when authentic nodes exist (Issue 12)
                 const startX = 50;
-                const startY = doc.y + 10;
-                const boxWidth = 495;
-                const boxHeight = 160;
+                const startY = doc.y;
+                const boxWidth = 500;
+                const boxHeight = 180;
 
                 doc.save();
-                doc.rect(startX, startY, boxWidth, boxHeight).fillAndStroke('#F8FAFC', '#CBD5E1');
+                doc.rect(startX, startY, boxWidth, boxHeight).lineWidth(1).strokeColor('#E2E8F0').fillColor('#F8FAFC').fillAndStroke('#F8FAFC', '#CBD5E1');
 
-                const renderNodes = nodes.slice(0, 4);
-                const positions = [
-                  { x: startX + 70, y: startY + 70 },
-                  { x: startX + 200, y: startY + 40 },
-                  { x: startX + 330, y: startY + 70 },
-                  { x: startX + 200, y: startY + 120 }
-                ];
+                const positions: Array<{ x: number; y: number }> = [];
+                const centerX = startX + boxWidth / 2;
+                const centerY = startY + boxHeight / 2;
+                const radius = 60;
+
+                renderNodes.forEach((_: any, idx: number) => {
+                  const angle = (idx / renderNodes.length) * 2 * Math.PI;
+                  positions.push({
+                    x: centerX + radius * Math.cos(angle),
+                    y: centerY + radius * Math.sin(angle)
+                  });
+                });
 
                 // Draw edges
-                doc.strokeColor('#94A3B8').lineWidth(1.5);
-                for (let i = 0; i < renderNodes.length - 1; i++) {
-                  const p1 = positions[i % positions.length];
+                doc.strokeColor('#94A3B8').lineWidth(1);
+                for (let i = 0; i < positions.length; i++) {
+                  const p1 = positions[i];
                   const p2 = positions[(i + 1) % positions.length];
                   doc.moveTo(p1.x, p1.y).lineTo(p2.x, p2.y).stroke();
                 }
@@ -301,7 +330,7 @@ export class ReportService {
             }
             doc.moveDown();
 
-            // Section 7: Temporal Findings (Issues 11 & 13)
+            // Section 7: Temporal Findings
             doc.fontSize(14).text('7. Temporal Findings', { underline: true });
             doc.moveDown(0.3);
             try {
@@ -320,7 +349,7 @@ export class ReportService {
             }
             doc.moveDown();
 
-            // Section 8: Bridge / Cluster Findings (Issues 11 & 14)
+            // Section 8: Bridge / Cluster Findings
             doc.fontSize(14).text('8. Bridge & Cluster Findings', { underline: true });
             doc.moveDown(0.3);
             try {
@@ -339,7 +368,7 @@ export class ReportService {
             }
             doc.moveDown();
 
-            // Section 9: AI-Generated Analytical Summary (Issues 11 & 15)
+            // Section 9: AI-Generated Analytical Summary
             doc.fontSize(14).text('9. AI-Generated Analytical Summary', { underline: true });
             doc.moveDown(0.3);
             doc.fontSize(8).fillColor('#DC2626').text('[DISCLAIMER: AI-generated analytical summary — strictly investigative inference, not verified factual evidence or human judgment.]');
@@ -359,16 +388,31 @@ export class ReportService {
             }
             doc.moveDown();
 
-            // Section 10: Evidence References & Cryptographic Integrity Verification (Issue 17)
+            // Section 10: Evidence References & Cryptographic Integrity Verification (Issue 17: Bounded Concurrency)
             doc.addPage();
             doc.fontSize(14).text('10. Evidence Cryptographic Integrity Verification', { underline: true });
             doc.moveDown(0.3);
             if (evidenceList.length === 0) {
               doc.fontSize(10).text('No physical or digital evidence artifacts uploaded.');
             } else {
-              for (const ev of evidenceList) {
-                const integrityCheck = await EvidenceService.verifyEvidenceIntegrity(ev.id);
-                const integrityStatus = integrityCheck?.integrity?.status || 'UNKNOWN';
+              // Bounded concurrent verification (chunks of 10)
+              const chunkSize = 10;
+              const integrityResults: Array<{ ev: any; integrityStatus: string }> = [];
+              for (let i = 0; i < evidenceList.length; i += chunkSize) {
+                const chunk = evidenceList.slice(i, i + chunkSize);
+                const chunkResults = await Promise.all(
+                  chunk.map(async (ev) => {
+                    const integrityCheck = await EvidenceService.verifyEvidenceIntegrity(ev.id);
+                    return {
+                      ev,
+                      integrityStatus: integrityCheck?.integrity?.status || 'UNKNOWN'
+                    };
+                  })
+                );
+                integrityResults.push(...chunkResults);
+              }
+
+              for (const { ev, integrityStatus } of integrityResults) {
                 const statusColor = integrityStatus === 'VALID' ? '#16A34A' : integrityStatus === 'TAMPERED' ? '#DC2626' : '#EAB308';
                 
                 doc.fontSize(9).fillColor('#000000').text(`• Evidence ID: ${ev.id} | Source: ${ev.source_ref} | Stored SHA-256: ${ev.sha256.substring(0, 16)}... | Integrity: `, { continued: true });
@@ -405,7 +449,7 @@ export class ReportService {
             doc.fontSize(10).text(params?.investigator_notes || params?.notes || 'No custom notes provided for this report iteration.');
             doc.moveDown();
 
-            // Section 13: Analysis Component Status & Disclaimers (Issue 11)
+            // Section 13: Analysis Component Status & Disclaimers
             doc.fontSize(14).text('13. Intelligence Component Status Summary', { underline: true });
             doc.moveDown(0.3);
             doc.fontSize(9).text(`• Graph Topology Engine (D4): ${analysisStatus.graph}`);
@@ -415,19 +459,19 @@ export class ReportService {
             doc.text(`• Investigative Lead Generator (D3): ${analysisStatus.ai_leads}`);
             doc.moveDown();
 
-            // Section 14: Limitations & Caveats
+            // Section 14: Limitations & Analytical Bounds
             doc.fontSize(14).text('14. Limitations & Analytical Bounds', { underline: true });
             doc.moveDown(0.3);
             doc.fontSize(10).text('Findings are based on current evidence records and automated probabilistic graph matching models. Low-confidence matches and anomaly flags require field verification by authorized officers.');
             doc.moveDown();
 
-            // Section 15: Audit Ledger Metadata (Issue 16)
+            // Section 15: Audit Ledger Metadata (Issue 18: Latest Audit Event Hash)
             const latestAudit = await db.getLatestAuditEvent();
             const auditHash = latestAudit ? latestAudit.hash : 'GENESIS';
 
             doc.fontSize(14).text('15. Cryptographic Audit Ledger Metadata', { underline: true });
             doc.moveDown(0.3);
-            doc.fontSize(10).text(`Audit Ledger Root Hash: ${auditHash}`);
+            doc.fontSize(10).text(`Latest Audit Event Hash: ${auditHash}`);
             doc.text(`Correlation ID: ${authCtx.correlation_id || 'N/A'}`);
             doc.moveDown();
 
@@ -440,18 +484,17 @@ export class ReportService {
 
             doc.end();
 
-            // Store analysis_status in report record (Issue 11)
             await db.updateReport(reportId, {
               parameters: {
                 ...params,
                 analysis_status: analysisStatus
               }
             });
-          } catch (compilationErr) {
+          } catch (compilationErr: any) {
             writeStream.destroy();
             await db.updateReport(reportId, {
               status: 'FAILED',
-              error: (compilationErr as any).message || 'Failed during PDF content building'
+              error: compilationErr.message || 'Failed during PDF content building'
             });
             reject(compilationErr);
           }

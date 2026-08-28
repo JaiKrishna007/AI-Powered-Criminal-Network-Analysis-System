@@ -61,6 +61,8 @@ export class EntityResolutionService {
     }
   ): Promise<{
     score: number;
+    deterministic_score: number;
+    ml_probability: number | null;
     signals: EntitySignals;
     has_conflict: boolean;
     auto_merge_allowed: boolean;
@@ -99,21 +101,22 @@ export class EntityResolutionService {
     const contextSim = this.computeContextSimilarity(caseId, existingRecord.context || {}, newRecord.context || {});
     const embSim = this.computeEmbeddingSimilarity(existingRecord.name, newRecord.name);
 
+    let deterministicScore = 
+      0.30 * nameSim +
+      0.15 * phoneSim +
+      0.20 * identifierSim +
+      0.15 * contextSim +
+      0.20 * embSim;
+
+    if (hasConflict) {
+      deterministicScore *= 0.5;
+    }
+
     if (mlStatus === 'UNAVAILABLE' || !mlResponse) {
-      // Use documented deterministic transparent formula when ML is unavailable
-      let deterministicScore = 
-        0.30 * nameSim +
-        0.15 * phoneSim +
-        0.20 * identifierSim +
-        0.15 * contextSim +
-        0.20 * embSim;
-
-      if (hasConflict) {
-        deterministicScore *= 0.5;
-      }
-
       return {
         score: Number(deterministicScore.toFixed(4)),
+        deterministic_score: Number(deterministicScore.toFixed(4)),
+        ml_probability: null,
         signals: {
           name_similarity: nameSim,
           phonetic_similarity: phoneSim,
@@ -146,6 +149,8 @@ export class EntityResolutionService {
 
     return {
       score: Number(totalScore.toFixed(4)),
+      deterministic_score: Number(deterministicScore.toFixed(4)),
+      ml_probability: Number(mlResponse.probability.toFixed(4)),
       signals: {
         name_similarity: mlResponse.signals?.name_similarity ?? nameSim,
         phonetic_similarity: mlResponse.signals?.phonetic_similarity ?? phoneSim,
