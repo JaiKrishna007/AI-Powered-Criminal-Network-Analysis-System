@@ -28,9 +28,9 @@
     "mongodb": "^7.6.0",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.20.1",
+    "shared-contracts": "file:../shared-contracts",
     "uuid": "^14.0.2",
-    "zod": "^4.4.3",
-    "shared-contracts": "*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

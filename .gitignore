@@ -1,7 +1,44 @@
+# Dependencies
 node_modules/
-dist/
+**/node_modules/
+
+# Next.js build
+.next/
+**/.next/
+out/
+**/out/
 build/
+**/build/
+dist/
+**/dist/
+
+# TypeScript
+*.tsbuildinfo
+**/*.tsbuildinfo
+next-env.d.ts
+
+# Environment & Secrets
 .env
-.gemini/
+.env*.local
+**/.env
+**/.env*.local
+
+# Logs
+logs/
 *.log
-package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Test coverage & caches
+coverage/
+**/coverage/
+.turbo/
+**/.turbo/
+.cache/
+**/.cache/
