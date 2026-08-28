@@ -82,10 +82,11 @@ router.get('/:id/download', AuditMiddleware.auditEvent('EVIDENCE_EXPORT'), async
 
   const baseDir = path.resolve(EVIDENCE_DIR);
   const storageKey = evidence.storage_uri.replace('local://', '');
-  const filePath = path.resolve(baseDir, storageKey);
-
-  if (!filePath.startsWith(baseDir + path.sep) && filePath !== baseDir) {
-    return res.status(400).json({ error: 'INVALID_STORAGE_PATH', message: 'Path traversal detected' });
+  let filePath: string;
+  try {
+    filePath = EvidenceService.safeStoragePath(baseDir, storageKey);
+  } catch (err: any) {
+    return res.status(400).json({ error: 'INVALID_STORAGE_PATH', message: err.message });
   }
 
   if (!fs.existsSync(filePath)) {

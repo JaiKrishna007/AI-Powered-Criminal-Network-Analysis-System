@@ -24,6 +24,14 @@ export class EntityReviewService {
       throw new Error(`Candidate ${candidateId} not found`);
     }
 
+    // 1. Enforce strict state machine transitions (Issue 6)
+    if ((candidate.status === 'ACCEPTED' || candidate.status === 'REJECTED') && candidate.status !== decision) {
+      throw new Error(`Cannot transition from terminal state: ${candidate.status}`);
+    }
+    if (candidate.status === 'DEFERRED' && decision === 'DEFERRED') {
+      throw new Error('Cannot transition from DEFERRED to DEFERRED');
+    }
+
     // 1. Enforce explicit case authorization before recording review (Issue 6)
     await AuthMiddleware.authorizeCaseAccess({
       userId: reviewerId,
@@ -74,17 +82,6 @@ export class EntityReviewService {
       candidate_id: candidate.id,
       case_id: candidate.case_id,
       decision: 'ACCEPTED',
-      canonical_entity: {
-        id: candidate.id.replace('CAND-', 'ENT-'),
-        name: candidate.name,
-        type: candidate.candidate_data?.type || 'PERSON',
-        identifiers: candidate.identifiers || {},
-        properties: {
-          phone: candidate.normalized_phone || candidate.original_phone,
-          score: candidate.score
-        },
-        created_at: new Date().toISOString()
-      },
       reviewer_id: reviewerId,
       decided_at: decidedAt || new Date().toISOString()
     };
@@ -115,11 +112,17 @@ export class EntityReviewService {
     };
 
     try {
-      await GraphClient.fetchD4('/internal/entities/resolve', context, validated.data, 5000);
+      const d4Response = await GraphClient.fetchD4('/internal/entities/resolve', context, validated.data, 5000);
+      const canonicalId = d4Response?.canonical_entity_id;
+      
       await db.updateEntityReview(candidateId, {
         sync_state: 'SYNCED',
         sync_error: null
       });
+
+      if (canonicalId) {
+        await db.updateCandidate(candidateId, { canonical_entity_id: canonicalId });
+      }
     } catch (e: any) {
       console.warn(`Downstream sync for candidate ${candidateId} failed: ${e.message}`);
       await db.updateEntityReview(candidateId, {

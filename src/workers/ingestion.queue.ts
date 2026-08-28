@@ -10,7 +10,16 @@ import path from 'path';
 import { EVIDENCE_DIR } from '../config/paths';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const connection = new (require('ioredis'))(redisUrl, { maxRetriesPerRequest: null });
+const Redis = require('ioredis');
+let connection: any;
+try {
+  connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  connection.on('error', (err: any) => {
+    console.warn(`Redis connection error in IngestionQueue: ${err.message}`);
+  });
+} catch (e: any) {
+  console.warn(`Redis initialization error in IngestionQueue: ${e.message}`);
+}
 
 export const ingestionQueue = new Queue('ingestionQueue', { connection });
 
@@ -45,7 +54,7 @@ export const startIngestionWorker = () => {
           phonetic_similarity: 0,
           identifier_similarity: 0,
           context_similarity: 0,
-          embedding_similarity: 0
+          lexical_similarity: 0
         };
         let hasConflict = false;
         let candidateMLStatus: 'AVAILABLE' | 'UNAVAILABLE' = 'AVAILABLE';
@@ -159,12 +168,11 @@ export const startIngestionWorker = () => {
 
         if (validatedRelationships.length > 0) {
           try {
-            const authCtx = {
-              user_id: 'SYSTEM',
-              role: 'SYSTEM',
-              case_id: caseId,
-              access_level: 'ADMIN'
-            };
+            const { getEffectiveRole } = await import('../utils/security.js');
+            const member = await db.getCaseMember(caseId, jobData.data.user_id);
+            const accessLevel = member?.access_level || (jobData.data.roles?.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');
+            const effectiveRole = getEffectiveRole(jobData.data.roles);
+            const authCtx = jobData.data.userContext;
             const { GraphClient } = await import('../services/graph_client.js');
             await GraphClient.fetchD4('/relationships/batch', authCtx, {
               case_id: caseId,

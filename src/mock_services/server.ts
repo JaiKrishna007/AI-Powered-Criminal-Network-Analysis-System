@@ -96,7 +96,7 @@ export function createD3App() {
     res.status(200).json({
       status: 'SUCCESS',
       response: `Investigative Analysis: Based on the synthesized case intelligence for '${query || 'query'}', key actors show frequent co-location and transactional overlaps.`,
-      grounding: ['EVD-101', 'EVD-102']
+      grounding: []
     });
   });
 
@@ -201,13 +201,13 @@ export function createD4App() {
   app.post('/relationships', handleRelationship);
 
   app.post('/internal/entities/resolve', (req: Request, res: Response) => {
-    const { candidate_id, decision, canonical_entity } = req.body || {};
+    const { candidate_id, decision } = req.body || {};
     res.status(200).json({
       status: 'SUCCESS',
       synced: true,
       candidate_id,
       decision,
-      canonical_entity
+      canonical_entity_id: candidate_id ? candidate_id.replace('CAND-', 'ENT-') : `ENT-${Date.now()}`
     });
   });
 

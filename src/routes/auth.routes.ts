@@ -14,13 +14,17 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'BAD_REQUEST', message: 'Username and password are required.' });
   }
 
-  // Find user by display_name or id
-  const users = await db.getAllUsers();
-  const user = users.find(u => u.display_name === username || u.id === username);
+  // Find user by username
+  const user = await db.getUserByUsername(username);
 
   if (!user || !user.password_hash) {
     await AuditMiddleware.logAction(username, 'LOGIN_FAILURE');
     return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid credentials.' });
+  }
+
+  if (user.status !== 'ACTIVE') {
+    await AuditMiddleware.logAction(username, 'LOGIN_FAILURE_INACTIVE');
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'User account is not active.' });
   }
 
   const isValid = await bcrypt.compare(password, user.password_hash);

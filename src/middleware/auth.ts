@@ -41,6 +41,10 @@ export class AuthMiddleware {
       return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid user account.' });
     }
 
+    if (user.status !== 'ACTIVE') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'User account is not active.' });
+    }
+
     const roles = await db.getUserRoles(userId);
     req.user = {
       id: user.id,
@@ -144,7 +148,7 @@ export class AuthMiddleware {
     }
 
     if (targetCase.classification && !(targetCase.classification in clearanceMap)) {
-      throw new Error('INVALID_CASE_CLASSIFICATION');
+      throw new Error('INVALID_CLASSIFICATION');
     }
 
     const requiredClearance = clearanceMap[reqClassification];
@@ -171,5 +175,23 @@ export class AuthMiddleware {
     if (userClearance < requiredClearance) {
       throw ServiceErrors.CASE_ACCESS_DENIED();
     }
+  }
+
+  /**
+   * Centralized Authorization function for Evidence-level access (Issue 10).
+   */
+  public static async authorizeEvidenceAccess(options: { userId: string, evidenceId?: string, evidence?: any }): Promise<void> {
+    const { userId, evidenceId } = options;
+    const ev = options.evidence || (evidenceId ? await db.getEvidence(evidenceId) : null);
+    
+    if (!ev) {
+      throw new Error('EVIDENCE_NOT_FOUND');
+    }
+
+    await AuthMiddleware.authorizeCaseAccess({
+      userId,
+      caseId: ev.case_id,
+      classification: ev.classification
+    });
   }
 }

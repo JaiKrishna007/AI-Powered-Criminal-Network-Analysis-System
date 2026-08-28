@@ -101,6 +101,8 @@ export class ControlPlaneDB {
     }
 
     await this.db.collection('users').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
+    await this.db.collection('users').createIndex({ status: 1 });
     await this.db.collection('roles').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('user_roles').createIndex({ user_id: 1, role_id: 1 }, { unique: true });
     await this.db.collection('user_roles').createIndex({ user_id: 1 });
@@ -151,10 +153,10 @@ export class ControlPlaneDB {
     const defaultPassword = process.env.DEMO_PASSWORD || process.env.ADMIN_INITIAL_PASSWORD || 'demo_password123_sih_only';
     const hash = await bcrypt.hash(defaultPassword, 10);
 
-    const demoUsers = [
-      { id: 'USR-INV-001', display_name: 'investigator1', status: 'ACTIVE', clearance_level: 2, role: 'INVESTIGATOR' },
-      { id: 'USR-SUP-001', display_name: 'supervisor1', status: 'ACTIVE', clearance_level: 3, role: 'SUPERVISOR' },
-      { id: 'USR-ADM-001', display_name: 'admin1', status: 'ACTIVE', clearance_level: 4, role: 'SYSTEM ADMIN' }
+    const demoUsers: Array<{ id: string, username: string, display_name: string, status: 'ACTIVE' | 'DISABLED' | 'INACTIVE' | 'SUSPENDED', clearance_level: number, role: string }> = [
+      { id: 'USR-INV-001', username: 'investigator1', display_name: 'investigator1', status: 'ACTIVE', clearance_level: 2, role: 'INVESTIGATOR' },
+      { id: 'USR-SUP-001', username: 'supervisor1', display_name: 'supervisor1', status: 'ACTIVE', clearance_level: 3, role: 'SUPERVISOR' },
+      { id: 'USR-ADM-001', username: 'admin1', display_name: 'admin1', status: 'ACTIVE', clearance_level: 4, role: 'SYSTEM ADMIN' }
     ];
 
     for (const user of demoUsers) {
@@ -196,6 +198,27 @@ export class ControlPlaneDB {
     }
     const res = await this.getCollection('users').findOne({ id });
     if (!res) return null;
+    const { _id, ...user } = res;
+    return user as unknown as User;
+  }
+
+  public async getUserByUsername(username: string): Promise<User | null> {
+    if (this.isTestEnv) {
+      for (const u of this.testUsers.values()) {
+        if (u.username === username || u.display_name === username) {
+          return u;
+        }
+      }
+      return null;
+    }
+    const res = await this.getCollection('users').findOne({ username });
+    if (!res) {
+        // Fallback for existing users without username
+        const resByDisplay = await this.getCollection('users').findOne({ display_name: username });
+        if (!resByDisplay) return null;
+        const { _id, ...user } = resByDisplay;
+        return user as unknown as User;
+    }
     const { _id, ...user } = res;
     return user as unknown as User;
   }
@@ -327,7 +350,7 @@ export class ControlPlaneDB {
     });
   }
 
-  public async addCaseMember(memberOrCaseId: CaseMember | string, userId?: string, accessLevel: string = 'MEMBER'): Promise<CaseMember> {
+  public async addCaseMember(memberOrCaseId: CaseMember | string, userId?: string, accessLevel: string = 'READ'): Promise<CaseMember> {
     const member: CaseMember = typeof memberOrCaseId === 'string'
       ? { case_id: memberOrCaseId, user_id: userId!, access_level: accessLevel }
       : memberOrCaseId;
@@ -715,6 +738,7 @@ export class ControlPlaneDB {
     return cand as unknown as EntityCandidate;
   }
 
+
   public async getCandidatesByCase(case_id: string): Promise<EntityCandidate[]> {
     if (this.isTestEnv) {
       const list: EntityCandidate[] = [];
@@ -728,6 +752,25 @@ export class ControlPlaneDB {
       const { _id, ...cand } = row;
       return cand as unknown as EntityCandidate;
     });
+  }
+
+  public async updateCandidate(id: string, updates: Partial<EntityCandidate>): Promise<EntityCandidate | null> {
+    if (this.isTestEnv) {
+      const cand = this.testCandidates.get(id);
+      if (cand) {
+        Object.assign(cand, updates);
+        return cand;
+      }
+      return null;
+    }
+    const res = await this.getCollection('candidates').findOneAndUpdate(
+      { id },
+      { $set: updates },
+      { returnDocument: 'after' }
+    );
+    if (!res) return null;
+    const { _id, ...cand } = res as any;
+    return cand as unknown as EntityCandidate;
   }
 
   // --- Reports ---

@@ -10,7 +10,11 @@ let reportQueue: Queue | null = null;
 let reportWorker: Worker | null = null;
 
 try {
-  const connection = new (require('ioredis'))(redisUrl, { maxRetriesPerRequest: null });
+  const Redis = require('ioredis');
+  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  connection.on('error', (err: any) => {
+    console.warn(`Redis connection error in ReportQueue: ${err.message}`);
+  });
   reportQueue = new Queue('reportQueue', { connection });
 } catch (e: any) {
   console.warn(`Redis not available for BullMQ ReportQueue: ${e.message}.`);
@@ -22,7 +26,11 @@ export const startReportWorker = () => {
   if (process.env.NODE_ENV === 'test' || !reportQueue) return;
 
   try {
-    const connection = new (require('ioredis'))(redisUrl, { maxRetriesPerRequest: null });
+    const Redis = require('ioredis');
+    const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+    connection.on('error', (err: any) => {
+      console.warn(`Redis connection error in ReportWorker: ${err.message}`);
+    });
     reportWorker = new Worker('reportQueue', async (job) => {
       const { reportId, caseId, userContext, version, params } = job.data;
       

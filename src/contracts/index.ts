@@ -118,8 +118,9 @@ export type ReportV1 = z.infer<typeof ReportSchema>;
 
 export const UserSchema = z.object({
   id: UserIdSchema,
+  username: z.string().optional(),
   display_name: z.string(),
-  status: z.string(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'DISABLED']),
   clearance_level: z.number().int().min(0).max(4).optional(),
   password_hash: z.string().optional()
 });
@@ -130,7 +131,7 @@ export const CaseSchema = z.object({
   id: CaseIdSchema,
   title: z.string(),
   description: z.string().optional(),
-  status: z.string(),
+  status: z.enum(['ACTIVE', 'CLOSED', 'ARCHIVED']),
   owner_id: UserIdSchema,
   classification: ClassificationSchema
 });
@@ -148,13 +149,13 @@ export type AuditEventRefV1 = z.infer<typeof AuditEventRefSchema>;
 
 // --- Downstream Response Validation Schemas (D3/D4/ML) ---
 export const MLResponseSchema = z.object({
-  probability: z.number().min(0).max(1),
+  probability: z.number().min(0).max(1).nullable(),
   signals: z.object({
     name_similarity: z.number(),
     phonetic_similarity: z.number(),
     identifier_similarity: z.number(),
     context_similarity: z.number(),
-    embedding_similarity: z.number()
+    lexical_similarity: z.number()
   }).optional()
 });
 

@@ -21,7 +21,7 @@ export async function seedDemoDataset(): Promise<void> {
   const passwordHash = await bcrypt.hash(demoPassword, 10);
 
   // 1. Seed Users
-  const users = [
+  const users: Array<{ id: string, display_name: string, status: 'ACTIVE' | 'DISABLED' | 'INACTIVE' | 'SUSPENDED', clearance_level: number, role: string }> = [
     { id: 'USR-INV-001', display_name: 'investigator1', status: 'ACTIVE', clearance_level: 3, role: 'INVESTIGATOR' },
     { id: 'USR-SUP-001', display_name: 'supervisor1', status: 'ACTIVE', clearance_level: 3, role: 'SUPERVISOR' },
     { id: 'USR-ADM-001', display_name: 'admin1', status: 'ACTIVE', clearance_level: 4, role: 'SYSTEM ADMIN' }
@@ -33,7 +33,7 @@ export async function seedDemoDataset(): Promise<void> {
       await db.createUser({
         id: u.id,
         display_name: u.display_name,
-        status: u.status,
+        status: u.status as 'ACTIVE' | 'DISABLED' | 'INACTIVE' | 'SUSPENDED',
         clearance_level: u.clearance_level,
         password_hash: passwordHash
       });
@@ -42,11 +42,11 @@ export async function seedDemoDataset(): Promise<void> {
   }
 
   // 2. Seed Case CASE-1042
-  const case1042 = {
+  const case1042: any = {
     id: 'CASE-1042',
     title: 'Operation Blue Falcon',
     description: 'Targeted multi-jurisdictional financial crime and transit illicit network analysis.',
-    status: 'ACTIVE',
+    status: 'ACTIVE' as const,
     owner_id: 'USR-INV-001',
     classification: 'RESTRICTED' as const
   };
@@ -121,7 +121,7 @@ export async function seedDemoDataset(): Promise<void> {
           phonetic_similarity: 1,
           identifier_similarity: 1,
           context_similarity: 1,
-          embedding_similarity: 1
+          lexical_similarity: 1
         },
         has_conflict: false,
         status: ent.status,

@@ -19,7 +19,19 @@ export function signAuthContext(context: Record<string, any>): {
   contextHeader: string;
   signatureHeader: string;
 } {
-  const contextHeader = JSON.stringify(context);
+  const payload = {
+    ...context,
+    issued_at: Date.now(),
+    expires_at: Date.now() + 60000 // 60 seconds expiration
+  };
+  
+  // Sort keys for canonical serialization
+  const sortedPayload = Object.keys(payload).sort().reduce((acc, key) => {
+    (acc as any)[key] = (payload as any)[key];
+    return acc;
+  }, {});
+
+  const contextHeader = JSON.stringify(sortedPayload);
   const signatureHeader = crypto
     .createHmac('sha256', INTERNAL_SECRET)
     .update(contextHeader)
@@ -40,7 +52,16 @@ export function verifyAuthContext(contextStr: string, signatureStr: string): boo
       .digest('hex');
 
     if (signatureStr.length !== expected.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(signatureStr), Buffer.from(expected));
+    const isValid = crypto.timingSafeEqual(Buffer.from(signatureStr), Buffer.from(expected));
+    
+    if (!isValid) return false;
+    
+    const parsed = JSON.parse(contextStr);
+    if (!parsed.expires_at || Date.now() > parsed.expires_at) {
+      return false;
+    }
+    
+    return true;
   } catch (err) {
     return false;
   }

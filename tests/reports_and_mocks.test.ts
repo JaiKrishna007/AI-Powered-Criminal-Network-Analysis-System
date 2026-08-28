@@ -4,6 +4,7 @@ import app from '../src/app';
 import { db } from '../src/db';
 import { ReportService } from '../src/services/report.service';
 import { GraphClient } from '../src/services/graph_client';
+import { AIClient } from '../src/services/ai_client';
 
 describe('Report Service & Mock Services Tests', () => {
   beforeEach(async () => {
@@ -194,7 +195,7 @@ describe('Report Service & Mock Services Tests', () => {
         phonetic_similarity: 1.0,
         identifier_similarity: 1.0,
         context_similarity: 0.7,
-        embedding_similarity: 0.75
+        lexical_similarity: 0.75
       }
     });
     expect(mlMatch.success).toBe(true);
@@ -238,7 +239,7 @@ describe('Report Service & Mock Services Tests', () => {
         phonetic_similarity: 1.0,
         identifier_similarity: 1.0,
         context_similarity: 1.0,
-        embedding_similarity: 1.0
+        lexical_similarity: 1.0
       },
       has_conflict: false,
       status: 'CANDIDATE',
@@ -260,11 +261,7 @@ describe('Report Service & Mock Services Tests', () => {
       expect.objectContaining({
         candidate_id: 'CAND-001',
         case_id: 'CASE-ALPHA',
-        decision: 'ACCEPTED',
-        canonical_entity: expect.objectContaining({
-          id: 'ENT-001',
-          name: 'John Doe'
-        })
+        decision: 'ACCEPTED'
       }),
       5000
     );
@@ -601,6 +598,8 @@ Rahul Verma,+919123456780,123456789012345,SBIN000123,DL-1C-9999,Bandra West,Alph
   it('Issues 11, 12, 13, 14, 15, 16, 17, 18: Report compilation records authentic analysis_status, verifies evidence integrity, computes real audit root hash, and enforces version sequencing', async () => {
     const { ReportService } = await import('../src/services/report.service.js');
     const { EvidenceService } = await import('../src/services/evidence.service.js');
+    const { AIClient } = await import('../src/services/ai_client.js');
+    const { GraphClient } = await import('../src/services/graph_client.js');
 
     // 1. Create evidence with stored physical file
     const evId = `EVD-REP-${Date.now()}`;
@@ -635,6 +634,15 @@ Rahul Verma,+919123456780,123456789012345,SBIN000123,DL-1C-9999,Bandra West,Alph
     const bridgeSpy = vi.spyOn(GraphClient, 'getBridgeAnalysis').mockResolvedValueOnce({
       insights: [],
       key_bridges: [{ entity_id: 'ENT-001', betweenness_score: 0.88 }]
+    });
+    const aiCopilotSpy = vi.spyOn(AIClient, 'copilot').mockResolvedValue({
+      status: 'SUCCESS',
+      response: 'Investigative Analysis.',
+      grounding: ['EVD-1']
+    });
+    const aiLeadsSpy = vi.spyOn(AIClient, 'generateLeads').mockResolvedValue({
+      status: 'SUCCESS',
+      leads: []
     });
 
     const authContext = {

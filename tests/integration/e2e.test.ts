@@ -107,6 +107,11 @@ describe('E2E Case 1042 Simulation', () => {
     expect(graphSpy).toHaveBeenCalled();
 
     // 5. Case Report Generation
+    vi.spyOn(GraphClient, 'getFocusedGraph').mockResolvedValueOnce({ nodes: [], edges: [] });
+    vi.spyOn(GraphClient, 'getBridgeAnalysis').mockResolvedValueOnce({ insights: [], key_bridges: [] });
+    vi.spyOn(GraphClient, 'getTemporalAnalysis').mockResolvedValueOnce({ insights: [], summary: 'Summary' });
+    vi.spyOn(AIClient, 'copilot').mockResolvedValueOnce({ status: 'SUCCESS', response: 'AI Copilot' });
+    vi.spyOn(AIClient, 'generateLeads').mockResolvedValueOnce({ status: 'SUCCESS', leads: [] });
     const reportRes = await request(app)
       .post('/api/cases/CASE-1042/reports')
       .set('x-user-id', 'USR-E2E')

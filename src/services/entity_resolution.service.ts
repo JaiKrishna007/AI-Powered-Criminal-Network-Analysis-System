@@ -7,7 +7,7 @@ export interface IEmbeddingService {
 }
 
 export interface IMLClient {
-  predictEntityMatch(candidatePair: any): Promise<{ probability: number; signals?: Record<string, number> }>;
+  predictEntityMatch(candidatePair: any): Promise<{ probability: number | null; signals?: Record<string, number> }>;
   predictAnomaly?(activitySeries: any): Promise<any>;
 }
 
@@ -33,13 +33,13 @@ export class EntityResolutionService {
    *       + 0.15 * phonetic_similarity
    *       + 0.20 * identifier_similarity
    *       + 0.15 * context_similarity
-   *       + 0.20 * embedding_similarity
+   *       + 0.20 * lexical_similarity
    */
   public static readonly WEIGHT_NAME = 0.30;
   public static readonly WEIGHT_PHONETIC = 0.15;
   public static readonly WEIGHT_IDENTIFIER = 0.20;
   public static readonly WEIGHT_CONTEXT = 0.15;
-  public static readonly WEIGHT_EMBEDDING = 0.20;
+  public static readonly WEIGHT_LEXICAL = 0.20;
 
   /**
    * Cheap deterministic blocking filter (Issue 21).
@@ -104,9 +104,9 @@ export class EntityResolutionService {
 
     // Calculate deterministic signals for verification/fallback
     const nameSim = this.computeNameSimilarity(existingRecord.name, newRecord.name);
-    const phoneSim = this.computePhoneticSimilarity(existingRecord.name, newRecord.name);
+    const phoneticSim = this.computePhoneticSimilarity(existingRecord.name, newRecord.name);
     const contextSim = this.computeContextSimilarity(caseId, existingRecord.context || {}, newRecord.context || {});
-    const embSim = this.computeEmbeddingSimilarity(existingRecord.name, newRecord.name);
+    const lexicalSim = this.computeLexicalSimilarity(existingRecord.name, newRecord.name);
 
     // Check conflict (BE-T05: High name/phonetic similarity + conflicting phone/identifier)
     const { isConflictingPhone, isConflictingIdentifier, identifierSim } = this.computeIdentifierSimilarity(
@@ -116,14 +116,14 @@ export class EntityResolutionService {
       newRecord.identifiers || {}
     );
 
-    const hasConflict = (nameSim >= 0.70 || phoneSim === 1.0) && (isConflictingPhone || isConflictingIdentifier);
+    const hasConflict = (nameSim >= 0.70 || phoneticSim === 1.0) && (isConflictingPhone || isConflictingIdentifier);
 
     let deterministicScore = 
       0.30 * nameSim +
-      0.15 * phoneSim +
+      0.15 * phoneticSim +
       0.20 * identifierSim +
       0.15 * contextSim +
-      0.20 * embSim;
+      0.20 * lexicalSim;
 
     if (hasConflict) {
       deterministicScore *= 0.5;
@@ -137,10 +137,10 @@ export class EntityResolutionService {
         ml_probability: null,
         signals: {
           name_similarity: nameSim,
-          phonetic_similarity: phoneSim,
+          phonetic_similarity: phoneticSim,
           identifier_similarity: identifierSim,
           context_similarity: contextSim,
-          embedding_similarity: embSim
+          lexical_similarity: lexicalSim
         },
         has_conflict: hasConflict,
         auto_merge_allowed: false,
@@ -150,7 +150,7 @@ export class EntityResolutionService {
     }
 
     // Call injected ML client to get probability and signals only for candidate pairs passing blocking
-    let mlResponse: { probability: number; signals?: Record<string, number> } | null = null;
+    let mlResponse: { probability: number | null; signals?: Record<string, number> } | null = null;
     let mlStatus: 'AVAILABLE' | 'UNAVAILABLE' = 'AVAILABLE';
     
     try {
@@ -161,17 +161,17 @@ export class EntityResolutionService {
       mlResponse = null;
     }
 
-    if (mlStatus === 'UNAVAILABLE' || !mlResponse) {
+    if (mlStatus === 'UNAVAILABLE' || !mlResponse || mlResponse.probability === null) {
       return {
         score: Number(deterministicScore.toFixed(4)),
         deterministic_score: Number(deterministicScore.toFixed(4)),
         ml_probability: null,
         signals: {
           name_similarity: nameSim,
-          phonetic_similarity: phoneSim,
+          phonetic_similarity: phoneticSim,
           identifier_similarity: identifierSim,
           context_similarity: contextSim,
-          embedding_similarity: embSim
+          lexical_similarity: lexicalSim
         },
         has_conflict: hasConflict,
         auto_merge_allowed: false,
@@ -180,7 +180,7 @@ export class EntityResolutionService {
       };
     }
 
-    let totalScore = mlResponse.probability;
+    let totalScore = mlResponse.probability !== null ? mlResponse.probability : deterministicScore;
 
     // Apply conflict penalty if contradictory identity data exists
     if (hasConflict) {
@@ -199,13 +199,13 @@ export class EntityResolutionService {
     return {
       score: Number(totalScore.toFixed(4)),
       deterministic_score: Number(deterministicScore.toFixed(4)),
-      ml_probability: Number(mlResponse.probability.toFixed(4)),
+      ml_probability: mlResponse.probability !== null ? Number(mlResponse.probability.toFixed(4)) : null,
       signals: {
         name_similarity: mlResponse.signals?.name_similarity ?? nameSim,
-        phonetic_similarity: mlResponse.signals?.phonetic_similarity ?? phoneSim,
+        phonetic_similarity: mlResponse.signals?.phonetic_similarity ?? phoneticSim,
         identifier_similarity: mlResponse.signals?.identifier_similarity ?? identifierSim,
         context_similarity: mlResponse.signals?.context_similarity ?? contextSim,
-        embedding_similarity: mlResponse.signals?.embedding_similarity ?? embSim
+        lexical_similarity: mlResponse.signals?.lexical_similarity ?? lexicalSim
       },
       has_conflict: hasConflict,
       auto_merge_allowed: autoMergeAllowed,
@@ -298,7 +298,7 @@ export class EntityResolutionService {
     return Math.min(1.0, score);
   }
 
-  public static computeEmbeddingSimilarity(text1: string, text2: string): number {
+  public static computeLexicalSimilarity(text1: string, text2: string): number {
     if (!text1 || !text2) return 0;
     if (this.embeddingService) {
       const res = this.embeddingService.computeSimilarity(text1, text2);

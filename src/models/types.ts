@@ -61,7 +61,7 @@ export interface EntitySignals {
   phonetic_similarity: number;
   identifier_similarity: number;
   context_similarity: number;
-  embedding_similarity: number;
+  lexical_similarity: number;
 }
 
 export interface EntityCandidate {
@@ -82,10 +82,12 @@ export interface EntityCandidate {
   deterministic_score?: number;
   review_recommendation?: string;
   sync_state?: SyncState;
+  canonical_entity_id?: string;
   candidate_data: any;
   created_at: string;
 }
 
+import { AuthContext } from '../services/ai_client';
 import { ClassificationType } from '../contracts';
 
 export interface IngestRequestPayload {
@@ -95,4 +97,5 @@ export interface IngestRequestPayload {
   storage_uri: string;
   content: string | Buffer;
   classification?: ClassificationType;
+  userContext: AuthContext;
 }

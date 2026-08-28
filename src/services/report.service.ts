@@ -264,15 +264,22 @@ export class ReportService {
             doc.fontSize(14).text('6. Focused Network Topology Visual', { underline: true });
             doc.moveDown(0.3);
             try {
-              const graphData = await GraphClient.getFocusedGraph(authCtx, 'ENT-ROOT', 2);
-              const nodes = graphData?.nodes || [];
-              const edges = graphData?.edges || [];
-
-              if (nodes.length === 0) {
+              const rootId = acceptedEntities.length > 0 ? (acceptedEntities[0].canonical_entity_id || acceptedEntities[0].id) : null;
+              
+              if (!rootId) {
                 analysisStatus.graph = 'EMPTY';
-                doc.fontSize(10).fillColor('#64748B').text('No connected nodes identified for focused graph topology.');
+                doc.fontSize(10).fillColor('#000000').text('No accepted entities found to generate focused graph topology.');
                 doc.fillColor('#000000');
               } else {
+                const graphData = await GraphClient.getFocusedGraph(authCtx, rootId, 2);
+                const nodes = graphData?.nodes || [];
+                const edges = graphData?.edges || [];
+
+                if (nodes.length === 0) {
+                  analysisStatus.graph = 'EMPTY';
+                  doc.fontSize(10).fillColor('#000000').text('No connected nodes identified for focused graph topology.');
+                  doc.fillColor('#000000');
+                } else {
                 analysisStatus.graph = 'AVAILABLE';
                 const renderNodes = nodes.slice(0, 8);
 
@@ -321,11 +328,12 @@ export class ReportService {
 
                 doc.restore();
                 doc.y = startY + boxHeight + 15;
+                }
               }
             } catch (e: any) {
               analysisStatus.graph = 'UNAVAILABLE';
               console.warn(`Graph analysis fetch error for report ${reportId}:`, e);
-              doc.fontSize(10).fillColor('#64748B').text('Network topology analysis unavailable.');
+              doc.fontSize(10).fillColor('#000000').text('Network topology analysis unavailable.');
               doc.fillColor('#000000');
             }
             doc.moveDown();

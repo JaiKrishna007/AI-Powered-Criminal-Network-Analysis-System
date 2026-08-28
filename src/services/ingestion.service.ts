@@ -118,7 +118,8 @@ export class IngestionService {
         caseId: payload.case_id,
         normalizedType,
         evidenceId,
-        storageUri
+        storageUri,
+        userContext: payload.userContext
       }, {
         attempts: 3, // Safe retries for transient failures (Task 33)
         backoff: { type: 'exponential', delay: 2000 },
@@ -139,7 +140,7 @@ export class IngestionService {
         const normName = NormalizationService.normalizeIdentifier(rec.name);
 
         let bestScore = 0;
-        let highestSignals = { name_similarity: 0, phonetic_similarity: 0, identifier_similarity: 0, context_similarity: 0, embedding_similarity: 0 };
+        let highestSignals = { name_similarity: 0, phonetic_similarity: 0, identifier_similarity: 0, context_similarity: 0, lexical_similarity: 0 };
         let hasConflict = false;
         let candidateMLStatus: 'AVAILABLE' | 'UNAVAILABLE' = 'AVAILABLE';
         let candidateMLProbability: number | null = null;
@@ -253,12 +254,11 @@ export class IngestionService {
 
         if (validatedRelationships.length > 0) {
           try {
-            const authCtx = {
-              user_id: 'SYSTEM',
-              role: 'SYSTEM',
-              case_id: payload.case_id,
-              access_level: 'ADMIN'
-            };
+            const { getEffectiveRole } = await import('../utils/security.js');
+            const member = await db.getCaseMember(payload.case_id, payload.userContext.user_id);
+            const accessLevel = member?.access_level || (payload.userContext.role.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');
+            const effectiveRole = getEffectiveRole([payload.userContext.role]);
+            const authCtx = payload.userContext;
             const { GraphClient } = await import('./graph_client.js');
             await GraphClient.fetchD4('/relationships/batch', authCtx, {
               case_id: payload.case_id,

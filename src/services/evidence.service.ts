@@ -10,6 +10,16 @@ if (!fs.existsSync(EVIDENCE_DIR)) {
 
 export class EvidenceService {
   /**
+   * Safely resolves a path and ensures it does not escape the base directory (Issue 33).
+   */
+  static safeStoragePath(baseDir: string, storageKey: string): string {
+    const resolvedPath = path.resolve(baseDir, storageKey);
+    if (!resolvedPath.startsWith(path.resolve(baseDir) + path.sep) && resolvedPath !== path.resolve(baseDir)) {
+      throw new Error('Path traversal detected');
+    }
+    return resolvedPath;
+  }
+  /**
    * Saves the raw buffer to the file system and returns the storage metadata (provider, key, URI, SHA-256).
    * Uses clean case-scoped key naming (e.g. CASE-1042/EVD-001.pdf or EVD-001.pdf).
    */
@@ -68,7 +78,15 @@ export class EvidenceService {
     }
 
     const storageKey = storageUri.replace('local://', '');
-    const filePath = path.join(EVIDENCE_DIR, storageKey);
+    let filePath: string;
+    try {
+      filePath = this.safeStoragePath(EVIDENCE_DIR, storageKey);
+    } catch (err: any) {
+      return {
+        evidence_id: evidenceId,
+        integrity: { status: 'ERROR', message: err.message }
+      };
+    }
 
     if (!fs.existsSync(filePath)) {
       return {

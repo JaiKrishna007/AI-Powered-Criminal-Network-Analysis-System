@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import session from 'express-session';
+import { globalLimiter, authLimiter, apiLimiter } from './middleware/rate_limit';
 import authRoutes from './routes/auth.routes';
 import casesRoutes from './routes/cases.routes';
 import adminRoutes from './routes/admin.routes';
@@ -18,8 +19,10 @@ const app = express();
 // Audit correlation ID propagation
 app.use(AuditMiddleware.correlationId);
 
-app.use(cors({ origin: true, credentials: true }));
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : true;
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: `${MAX_EVIDENCE_SIZE_MB}mb` }));
+app.use(globalLimiter);
 
 // Validate session secret in production (Issue 34)
 if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
@@ -64,6 +67,10 @@ app.use(session({
     maxAge: 86400000 // 24 hours
   }
 }));
+
+app.use('/api/auth/login', authLimiter);
+app.use('/api/ingestions', apiLimiter);
+app.use('/api/reports', apiLimiter);
 
 // Core Canonical API Routes
 app.use('/api/auth', authRoutes);

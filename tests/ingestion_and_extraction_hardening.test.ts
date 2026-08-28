@@ -72,7 +72,8 @@ describe('Ingestion, Extraction & Graph Sync Hardening (Issues 21 - 30)', () => 
       source_type: 'TEXT',
       source_ref: 'call_log.txt',
       content: textContent,
-      classification: 'RESTRICTED'
+      classification: 'RESTRICTED',
+      userContext: { user_id: 'USR-TEST', role: 'INVESTIGATOR', case_id: 'CASE-ING-02', access_level: 'MEMBER' }
     });
 
     expect(result.job.state).toBe('COMPLETED');

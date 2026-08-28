@@ -46,6 +46,12 @@ router.post('/', AuditMiddleware.auditEvent('CASE_CREATE'), async (req: Authenti
   };
 
   await db.createCase(caseObj);
+  // Add owner to case_members with OWNER access (Issue 3)
+  await db.addCaseMember({
+    case_id: caseId,
+    user_id: req.user!.id,
+    access_level: 'OWNER'
+  });
   return res.status(201).json({ status: 'SUCCESS', case: caseObj });
 });
 
@@ -74,6 +80,15 @@ router.post('/:case_id/members', AuthMiddleware.requireCaseAccess, AuditMiddlewa
 
   if (targetCase.owner_id !== req.user!.id && !req.user!.roles.includes('SYSTEM ADMIN')) {
     return res.status(403).json({ error: 'FORBIDDEN', message: 'Only case owner or system admin can manage case membership' });
+  }
+
+  if (!['READ', 'WRITE', 'ADMIN', 'OWNER'].includes(access_level || 'READ')) {
+    return res.status(400).json({ error: 'BAD_REQUEST', message: 'Invalid access level' });
+  }
+
+  const userToAdd = await db.getUser(user_id);
+  if (!userToAdd || userToAdd.status !== 'ACTIVE') {
+    return res.status(400).json({ error: 'BAD_REQUEST', message: 'User does not exist or is inactive' });
   }
 
   const member: CaseMember = {
@@ -108,13 +123,16 @@ router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req
       return res.status(400).json({ error: 'MISSING_REQUIRED_FIELDS', message: 'source_type and content are required' });
     }
 
+    const authCtx = await buildAuthContext(req, case_id);
+
     const result = await IngestionService.processIngestion({
       case_id,
       source_type,
       source_ref: source_ref || 'upload',
       storage_uri: storage_uri || `file://${source_ref || 'upload'}`,
       content,
-      classification
+      classification,
+      userContext: authCtx
     });
 
     return res.status(200).json({
@@ -179,7 +197,7 @@ router.post('/:case_id/entities/resolve', AuthMiddleware.requireCaseAccess, asyn
 const buildAuthContext = async (req: AuthenticatedRequest & { correlationId?: string }, caseId: string) => {
   const { getEffectiveRole } = await import('../utils/security.js');
   const member = await db.getCaseMember(caseId, req.user!.id);
-  const accessLevel = member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');
+  const accessLevel = member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'READ');
   const role = getEffectiveRole(req.user!.roles);
   return {
     user_id: req.user!.id,

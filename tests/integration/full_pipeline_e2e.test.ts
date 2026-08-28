@@ -156,6 +156,11 @@ describe('Comprehensive End-to-End Full Pipeline (Issue 37)', () => {
     expect(downloadRes.status).toBe(200);
 
     // 11. Compile Full Case Report
+    vi.spyOn(GraphClient, 'getFocusedGraph').mockResolvedValueOnce({ nodes: [], edges: [] });
+    vi.spyOn(GraphClient, 'getBridgeAnalysis').mockResolvedValueOnce({ insights: [], key_bridges: [] });
+    vi.spyOn(GraphClient, 'getTemporalAnalysis').mockResolvedValueOnce({ insights: [], summary: 'Summary' });
+    vi.spyOn(AIClient, 'copilot').mockResolvedValueOnce({ status: 'SUCCESS', response: 'AI Copilot' });
+    vi.spyOn(AIClient, 'generateLeads').mockResolvedValueOnce({ status: 'SUCCESS', leads: [] });
     const reportRes = await request(app)
       .post(`/api/cases/${caseId}/reports`)
       .set('Cookie', sessionCookie)
