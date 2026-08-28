@@ -172,13 +172,18 @@ export const startIngestionWorker = () => {
             const member = await db.getCaseMember(caseId, jobData.data.user_id);
             const accessLevel = member?.access_level || (jobData.data.roles?.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');
             const effectiveRole = getEffectiveRole(jobData.data.roles);
-            const authCtx = jobData.data.userContext;
-            const { GraphClient } = await import('../services/graph_client.js');
-            await GraphClient.fetchD4('/relationships/batch', authCtx, {
+            const authCtx = jobData.data.userContext || {
+              user_id: jobData.data.user_id || 'system_worker',
+              actor_id: jobData.data.user_id || 'system_worker',
+              role: effectiveRole,
               case_id: caseId,
-              evidence_id: evidenceId,
-              relationships: validatedRelationships
-            }, 5000);
+              allowed_case_ids: [caseId],
+              access_level: accessLevel
+            };
+            const { GraphSyncAdapter } = await import('./graph_sync.adapter.js');
+            for (const rel of validatedRelationships) {
+              await GraphSyncAdapter.syncRelationshipToD4(authCtx, rel);
+            }
             graphSyncStatus = 'SYNCED';
           } catch (err: any) {
             console.warn(`Failed to publish extracted relationships to D4: ${err.message}`);

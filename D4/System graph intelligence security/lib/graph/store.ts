@@ -26,8 +26,13 @@ export class GraphStore {
     const backend = process.env.GRAPH_BACKEND || (forceInMemory ? "memory" : "neo4j");
 
     if (backend === "neo4j") {
-      if (neo4jService && neo4jService.isConnected()) {
-        this.repository = neo4jService;
+      const neo = neo4jService || new Neo4jGraphRepository(
+        process.env.NEO4J_URI || "bolt://localhost:7687",
+        process.env.NEO4J_USER || "neo4j",
+        process.env.NEO4J_PASSWORD || "password"
+      );
+      if (neo && neo.isConnected()) {
+        this.repository = neo;
         this.neo4jActive = true;
       } else {
         throw new Error("DATABASE_UNAVAILABLE: Neo4j is configured as the backend but is not connected.");

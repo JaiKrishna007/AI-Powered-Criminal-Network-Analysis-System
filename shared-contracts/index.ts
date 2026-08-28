@@ -78,8 +78,11 @@ export const InsightSchema = z.object({
   description: z.string().optional(),
   confidence: z.number().min(0).max(1).optional(),
   supporting_entities: z.array(z.string()).optional(),
+  target_entity_ids: z.array(z.string()).optional(),
   supporting_evidence: z.array(EvidenceIdSchema).optional(),
-  created_at: TimestampSchema.optional()
+  evidence_ids: z.array(z.string()).optional(),
+  created_at: TimestampSchema.optional(),
+  timestamp: TimestampSchema.optional()
 });
 
 export type InsightV1 = z.infer<typeof InsightSchema>;
@@ -315,6 +318,7 @@ export interface INSIGHT_v1 {
   title: string;
   description: string;
   target_entity_ids: string[];
+  supporting_entities?: string[];
   evidence_ids: string[];
   timestamp: string; // ISO-8601 UTC
 }

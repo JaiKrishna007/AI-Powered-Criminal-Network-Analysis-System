@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { GraphSyncAdapter } from '../src/workers/graph_sync.adapter';
 import { GraphClient } from '../src/services/graph_client';
-import { AuthContext, EntityV1, RelationshipV1 } from 'shared-contracts';
+import { AuthContext, EntityV1, RelationshipV1, EvidenceV1 } from 'shared-contracts';
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
-// no wait import
 
-describe('D2-D4 End-to-End Integration Tests', () => {
+describe('D2-D4 End-to-End Integration & Security Tests', () => {
   let d4Process: ChildProcess;
   const d4Port = 8003;
 
@@ -27,10 +26,14 @@ describe('D2-D4 End-to-End Integration Tests', () => {
   };
 
   beforeAll(async () => {
-    // Start D4 server
+    // Start D4 server in test environment (forcing memory for headless deterministic execution)
     const d4Dir = path.resolve(__dirname, '../../D4/System graph intelligence security');
     const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-    d4Process = spawn(npxCmd, ['tsx', 'server.ts'], { cwd: d4Dir, env: { ...process.env, PORT: d4Port.toString() }, shell: true });
+    d4Process = spawn(npxCmd, ['tsx', 'server.ts'], { 
+      cwd: d4Dir, 
+      env: { ...process.env, PORT: d4Port.toString(), GRAPH_BACKEND: 'memory' }, 
+      shell: true 
+    });
     
     d4Process.stdout?.on('data', (data) => console.log(`D4 STDOUT: ${data.toString()}`));
     d4Process.stderr?.on('data', (data) => console.error(`D4 STDERR: ${data.toString()}`));
@@ -44,8 +47,77 @@ describe('D2-D4 End-to-End Integration Tests', () => {
     }
   });
 
-  it('should sync entities and relationships from D2 to D4 correctly', async () => {
-    // 1. Create Synthetic Fixture (CASE-001)
+  it('1. should sync evidence metadata with inferred MIME types from D2 to D4', async () => {
+    const evidence: EvidenceV1 = {
+      id: 'EVD-9001',
+      case_id: 'CASE-001',
+      source_type: 'PDF',
+      source_ref: 'wiretap_transcript.pdf',
+      storage_uri: 'local://CASE-001/EVD-9001.pdf',
+      sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      classification: 'RESTRICTED'
+    };
+
+    const res = await GraphSyncAdapter.syncEvidenceToD4(authContext, evidence);
+    expect(res.status).toBe('success');
+    expect(res.id).toBe('EVD-9001');
+
+    // Test MIME inference helper
+    const mapped = GraphSyncAdapter.mapEvidence(evidence);
+    expect(mapped.mime_type).toBe('application/pdf');
+    expect(mapped.sha256_hash).toBe(evidence.sha256);
+  });
+
+  it('2. should reject unsupported entity types with validation errors', () => {
+    const invalidEntity: any = {
+      id: 'INVALID_01',
+      name: 'Bad Entity',
+      type: 'UNKNOWN_CUSTOM_TYPE'
+    };
+
+    expect(() => GraphSyncAdapter.mapEntity(invalidEntity, 'CASE-001')).toThrow(
+      /Unsupported or invalid entity type/
+    );
+  });
+
+  it('3. should reject unsupported relationship types with validation errors', () => {
+    const invalidRel: any = {
+      id: 'INVALID_REL_01',
+      source_id: 'P1',
+      target_id: 'P2',
+      type: 'ARBITRARY_ACTION'
+    };
+
+    expect(() => GraphSyncAdapter.mapRelationship(invalidRel, 'CASE-001')).toThrow(
+      /Unsupported or invalid relationship type/
+    );
+  });
+
+  it('4. should reject unauthenticated requests or forged HMAC signatures', async () => {
+    // Attempt request without HMAC header directly to D4
+    const resNoAuth = await fetch(`http://localhost:${d4Port}/sync/entity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'P100', type: 'Person', case_id: 'CASE-001' })
+    });
+    expect(resNoAuth.status).toBe(401);
+
+    // Attempt request with forged signature
+    const forgedContext = Buffer.from(JSON.stringify({ user_id: 'attacker', case_id: 'CASE-001' })).toString('base64');
+    const resForged = await fetch(`http://localhost:${d4Port}/sync/entity`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Authorization-Context': forgedContext,
+        'X-Authorization-Signature': '0000000000000000000000000000000000000000000000000000000000000000'
+      },
+      body: JSON.stringify({ id: 'P100', type: 'Person', case_id: 'CASE-001' })
+    });
+    expect(resForged.status).toBe(403);
+  });
+
+  it('5. should sync entities, relationships and detect bridges across clusters', async () => {
+    // Synthetic Fixture (CASE-001)
     // Cluster A: P001-P002-P003-P004
     // Cluster B: P005-P006-P007-P008
     // Bridge: X001 (P004 - X001 - P005)
@@ -89,18 +161,17 @@ describe('D2-D4 End-to-End Integration Tests', () => {
     const bridgeResult = await GraphClient.getBridgeAnalysis(authContext);
     expect(bridgeResult.insights).toBeDefined();
     
-    // In D4 InMemoryGraphRepository, bridge analytics tests if X001 is found. Wait, D4 AnalyticsWorker calls bridgeDetector.
     const bridgeInsight = bridgeResult.insights?.find((i: any) => i.supporting_entities?.includes('X001') || i.target_entity_ids?.includes('X001'));
     expect(bridgeInsight).toBeDefined();
     expect(bridgeInsight?.type).toBe('POTENTIAL_BRIDGE');
   });
 
-  it('should enforce case isolation', async () => {
+  it('6. should enforce case isolation', async () => {
     // Create an entity in CASE-002
     const entityCase2: EntityV1 = { id: 'P009', name: 'Person 9', type: 'Person', created_at: new Date().toISOString() };
     await GraphSyncAdapter.syncEntityToD4(authContextCase2, entityCase2);
 
-    // Try to access CASE-001 with AuthContext for CASE-002
+    // Requesting CASE-002 with seed from CASE-001 yields empty graph
     const emptyGraph = await GraphClient.getFocusedGraph(authContextCase2, 'X001', 1);
     expect(emptyGraph.nodes.length).toBe(0);
   });

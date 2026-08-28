@@ -107,6 +107,15 @@ export class IngestionService {
     };
     await db.createEvidence(evidenceRecord);
 
+    // Sync evidence to D4 Graph Trust Service asynchronously if auth context is present
+    if (payload.userContext) {
+      import('../workers/graph_sync.adapter.js').then(({ GraphSyncAdapter }) => {
+        GraphSyncAdapter.syncEvidenceToD4(payload.userContext!, evidenceRecord).catch(err => {
+          console.warn(`Asynchronous evidence sync to D4 skipped or failed: ${err.message}`);
+        });
+      }).catch(() => {});
+    }
+
     let candidatesExtracted: EntityCandidate[] = [];
 
     // 8. Enqueue BullMQ Job for asynchronous processing (Task 32)

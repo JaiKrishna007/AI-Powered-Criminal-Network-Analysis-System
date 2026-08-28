@@ -106,8 +106,10 @@ export class EntityReviewService {
 
     const context = {
       user_id: reviewerId,
+      actor_id: reviewerId,
       role: effectiveRole,
       case_id: candidate.case_id,
+      allowed_case_ids: [candidate.case_id],
       access_level: accessLevel
     };
 

@@ -1,0 +1,80 @@
+import crypto from 'crypto';
+import { AuthContext } from '../contracts/types.js';
+
+function getInternalSecret(): string {
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.INTERNAL_SERVICE_SECRET) {
+      throw new Error('FATAL: INTERNAL_SERVICE_SECRET must be configured in production environment.');
+    }
+    return process.env.INTERNAL_SERVICE_SECRET;
+  }
+  return process.env.INTERNAL_SERVICE_SECRET || 'demo-internal-service-hmac-secret';
+}
+
+/**
+ * Validates HMAC-SHA256 signature for incoming internal service requests.
+ */
+export function verifyAuthContext(contextStr: string, signatureStr: string): boolean {
+  if (!contextStr || !signatureStr) return false;
+  try {
+    const internalSecret = getInternalSecret();
+    const contextJson = Buffer.from(contextStr, 'base64').toString('utf8');
+    const expected = crypto
+      .createHmac('sha256', internalSecret)
+      .update(contextJson)
+      .digest('hex');
+
+    if (signatureStr.length !== expected.length) return false;
+    const isValid = crypto.timingSafeEqual(Buffer.from(signatureStr), Buffer.from(expected));
+    
+    if (!isValid) return false;
+    
+    const parsed = JSON.parse(contextJson);
+    if (!parsed.expires_at || Date.now() > parsed.expires_at) {
+      return false;
+    }
+    
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Parses and verifies the AuthContext from incoming request headers.
+ * Returns the strongly typed, validated AuthContext.
+ */
+export function extractAndVerifyAuthContext(headers: Record<string, string | string[] | undefined>): AuthContext {
+  const contextHeader = headers['x-authorization-context'];
+  const signatureHeader = headers['x-authorization-signature'];
+
+  const contextStr = Array.isArray(contextHeader) ? contextHeader[0] : contextHeader;
+  const signatureStr = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+
+  if (!contextStr || !signatureStr) {
+    throw new Error('UNAUTHORIZED: Missing X-Authorization-Context or X-Authorization-Signature headers');
+  }
+
+  const isValid = verifyAuthContext(contextStr, signatureStr);
+  if (!isValid) {
+    throw new Error('FORBIDDEN: Invalid or expired authorization signature');
+  }
+
+  const contextJson = Buffer.from(contextStr, 'base64').toString('utf8');
+  const parsed = JSON.parse(contextJson);
+
+  // Normalize required fields
+  const authContext: AuthContext = {
+    user_id: parsed.user_id || parsed.actor_id || 'anonymous',
+    actor_id: parsed.actor_id || parsed.user_id || 'anonymous',
+    role: parsed.role || 'INVESTIGATOR',
+    case_id: parsed.case_id || '',
+    allowed_case_ids: Array.isArray(parsed.allowed_case_ids) 
+      ? parsed.allowed_case_ids 
+      : (parsed.case_id ? [parsed.case_id] : []),
+    access_level: parsed.access_level || 'READ',
+    correlation_id: parsed.correlation_id || ''
+  };
+
+  return authContext;
+}

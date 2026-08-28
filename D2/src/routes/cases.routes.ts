@@ -201,8 +201,10 @@ const buildAuthContext = async (req: AuthenticatedRequest & { correlationId?: st
   const role = getEffectiveRole(req.user!.roles);
   return {
     user_id: req.user!.id,
+    actor_id: req.user!.id,
     role,
     case_id: caseId,
+    allowed_case_ids: [caseId],
     access_level: accessLevel,
     correlation_id: req.correlationId
   };

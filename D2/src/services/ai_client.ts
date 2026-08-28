@@ -3,15 +3,8 @@ import { ServiceErrors, handleServiceError } from '../errors/service_errors';
 
 const getD3Url = () => process.env.D3_SERVICE_URL || 'http://localhost:8002';
 
-export interface AuthContext {
-  user_id: string;
-  role: string;
-  case_id: string;
-  access_level: string;
-  correlation_id?: string;
-}
-
-import { AIResponseSchema } from '../contracts';
+import { AuthContext, AIResponseSchema } from '../contracts';
+export { AuthContext };
 
 const CopilotResponseSchema = z.object({
   status: z.string(),

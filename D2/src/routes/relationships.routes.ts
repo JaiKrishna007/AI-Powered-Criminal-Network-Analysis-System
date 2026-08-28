@@ -38,8 +38,10 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next) => {
 
     const context = {
       user_id: req.user!.id,
+      actor_id: req.user!.id,
       role: effectiveRole,
       case_id: caseId,
+      allowed_case_ids: [caseId],
       access_level: member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR')
     };
 
@@ -84,8 +86,10 @@ router.get('/:id/evidence', async (req: AuthenticatedRequest, res: Response, nex
 
     const context = {
       user_id: req.user!.id,
+      actor_id: req.user!.id,
       role: effectiveRole,
       case_id: caseId,
+      allowed_case_ids: [caseId],
       access_level: member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR')
     };
 

@@ -37,7 +37,7 @@ export class GraphClient {
       const response = await fetch(`${getD4Url()}${endpoint}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ context, ...payload }),
+        body: JSON.stringify(payload),
         signal: controller.signal
       });
 
