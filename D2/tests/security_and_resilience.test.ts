@@ -218,14 +218,14 @@ describe('Security & Resilience Verification (Issues 41 - 44)', () => {
       await EntityReviewService.recordReviewDecision('CAND-ALPHA-SUP', 'ACCEPTED', 'USR-SUPERVISOR-01');
 
       expect(d4Spy).toHaveBeenCalledWith(
-        '/internal/entities/resolve',
+        '/sync/entity',
         expect.objectContaining({
           user_id: 'USR-SUPERVISOR-01',
           role: 'SUPERVISOR',
           access_level: 'ADMIN'
         }),
         expect.anything(),
-        5000
+        10000
       );
 
       d4Spy.mockRestore();

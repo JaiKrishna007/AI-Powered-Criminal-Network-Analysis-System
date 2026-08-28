@@ -110,8 +110,20 @@ export class IngestionService {
     // Sync evidence to D4 Graph Trust Service asynchronously if auth context is present
     if (payload.userContext) {
       import('../workers/graph_sync.adapter.js').then(({ GraphSyncAdapter }) => {
-        GraphSyncAdapter.syncEvidenceToD4(payload.userContext!, evidenceRecord).catch(err => {
+        GraphSyncAdapter.syncEvidenceToD4(payload.userContext!, evidenceRecord).catch(async err => {
           console.warn(`Asynchronous evidence sync to D4 skipped or failed: ${err.message}`);
+          try {
+            const job = await db.getIngestionJob(jobId);
+            if (job) {
+              const warnings = job.warnings || [];
+              if (!warnings.includes('EVIDENCE_SYNC_FAILED')) {
+                warnings.push('EVIDENCE_SYNC_FAILED');
+              }
+              await db.updateIngestionJobState(jobId, job.state, job.error, warnings, 'FAILED');
+            }
+          } catch (dbErr) {
+            console.error(`Failed to update job state for failed evidence sync:`, dbErr);
+          }
         });
       }).catch(() => {});
     }

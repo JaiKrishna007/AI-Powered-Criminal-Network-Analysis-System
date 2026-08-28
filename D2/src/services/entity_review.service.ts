@@ -78,10 +78,23 @@ export class EntityReviewService {
       throw new Error(`Candidate ${candidateId} not found for synchronization`);
     }
 
+    const canonicalEntityId = candidate.canonical_entity_id || candidate.id.replace('CAND-', 'ENT-');
+    
+    const canonicalEntity = {
+      id: canonicalEntityId,
+      name: candidate.name,
+      type: candidate.candidate_data?.type || 'UNKNOWN',
+      identifiers: candidate.identifiers,
+      properties: candidate.candidate_data?.properties || {},
+      created_at: candidate.created_at,
+      updated_at: new Date().toISOString()
+    };
+
     const resolutionPayload: EntityResolutionEventV1 = {
       candidate_id: candidate.id,
       case_id: candidate.case_id,
       decision: 'ACCEPTED',
+      canonical_entity: canonicalEntity,
       reviewer_id: reviewerId,
       decided_at: decidedAt || new Date().toISOString()
     };
@@ -114,16 +127,22 @@ export class EntityReviewService {
     };
 
     try {
-      const d4Response = await GraphClient.fetchD4('/internal/entities/resolve', context, validated.data, 5000);
-      const canonicalId = d4Response?.canonical_entity_id;
-      
-      await db.updateEntityReview(candidateId, {
-        sync_state: 'SYNCED',
-        sync_error: null
-      });
+      if (validated.data.decision === 'ACCEPTED' && validated.data.canonical_entity) {
+        const { GraphSyncAdapter } = await import('../workers/graph_sync.adapter.js');
+        await GraphSyncAdapter.syncEntityToD4(context, validated.data.canonical_entity);
+        const canonicalId = validated.data.canonical_entity.id;
+        
+        await db.updateEntityReview(candidateId, {
+          sync_state: 'SYNCED',
+          sync_error: null
+        });
 
-      if (canonicalId) {
         await db.updateCandidate(candidateId, { canonical_entity_id: canonicalId });
+      } else {
+        await db.updateEntityReview(candidateId, {
+          sync_state: 'SYNCED',
+          sync_error: null
+        });
       }
     } catch (e: any) {
       console.warn(`Downstream sync for candidate ${candidateId} failed: ${e.message}`);

@@ -38,6 +38,10 @@ const ENTITY_TYPE_MAP: Record<string, NodeType> = {
 
 /**
  * Strict mapping dictionary for Relationship Types from D2 (Backend/Data) to D4 (Graph/Trust).
+ * Note on Semantic Collapsing (Issue 12):
+ * - MEMBER_OF and OPERATES are collapsed into ASSOCIATED_WITH.
+ * - INVOLVED_IN is collapsed into PART_OF_CASE.
+ * This is done to align with D4's canonical graph constraints while accepting some semantic loss.
  */
 const RELATIONSHIP_TYPE_MAP: Record<string, RelationshipType> = {
   'CALLED': 'CALLED',
@@ -99,7 +103,7 @@ export class GraphSyncAdapter {
       id: d2Entity.id,
       type: mappedType,
       case_id: caseId,
-      event_time: d2Entity.created_at || new Date().toISOString(),
+      event_time: d2Entity.properties?.event_time,
       properties: {
         name: d2Entity.name,
         identifiers: d2Entity.identifiers || [],
@@ -130,7 +134,7 @@ export class GraphSyncAdapter {
       throw new Error(`Validation Error: Unsupported or invalid relationship type '${d2Rel.type}' for relationship ID '${d2Rel.id}'`);
     }
 
-    const eventTime = d2Rel.properties?.event_time || d2Rel.created_at || new Date().toISOString();
+    const eventTime = d2Rel.properties?.event_time;
     const effectiveStart = d2Rel.properties?.effective_start;
     const effectiveEnd = d2Rel.properties?.effective_end;
 
@@ -174,9 +178,11 @@ export class GraphSyncAdapter {
       mime_type: mimeType,
       sha256_hash: d2Ev.sha256,
       stored_hash: d2Ev.sha256,
-      status: 'VERIFIED',
+      status: 'UNCHECKED',
       created_at: new Date().toISOString(),
-      content: d2Ev.storage_uri
+      properties: {
+        storage_uri: d2Ev.storage_uri
+      }
     };
   }
 

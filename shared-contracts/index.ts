@@ -295,9 +295,10 @@ export interface EVIDENCE_v1 {
   mime_type: string;
   sha256_hash: string;
   stored_hash?: string;
-  status?: "VERIFIED" | "MISMATCH";
+  status?: "VERIFIED" | "MISMATCH" | "UNCHECKED";
   created_at: string; // ISO-8601 UTC
   content?: string | Uint8Array;
+  properties?: Record<string, any>;
 }
 
 export interface GRAPH_v1 {

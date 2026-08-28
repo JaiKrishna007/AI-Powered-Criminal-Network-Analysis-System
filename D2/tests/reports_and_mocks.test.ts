@@ -254,16 +254,15 @@ describe('Report Service & Mock Services Tests', () => {
     expect(reviewSuccess.decision).toBe('ACCEPTED');
     expect(reviewSuccess.sync_state).toBe('SYNCED');
 
-    // Verify endpoint called is /internal/entities/resolve with ENTITY_RESOLUTION.v1 shape
+    // Verify endpoint called is /sync/entity
     expect(graphSpy).toHaveBeenCalledWith(
-      '/internal/entities/resolve',
+      '/sync/entity',
       expect.objectContaining({ user_id: 'USR-INV-01', case_id: 'CASE-ALPHA' }),
       expect.objectContaining({
-        candidate_id: 'CAND-001',
-        case_id: 'CASE-ALPHA',
-        decision: 'ACCEPTED'
+        id: 'ENT-001',
+        case_id: 'CASE-ALPHA'
       }),
-      5000
+      10000
     );
 
     // 2. Failure case: D4 sync fails, review remains ACCEPTED but sync_state becomes SYNC_FAILED
@@ -279,6 +278,8 @@ describe('Report Service & Mock Services Tests', () => {
     const retried = await EntityReviewService.retrySync('CAND-001', 'USR-INV-01');
     expect(retried.sync_state).toBe('SYNCED');
     expect(retried.sync_error).toBeNull();
+    
+    vi.restoreAllMocks();
   });
 
   it('Issue 8 & 9: EntityResolutionService supports mock client injection and handles ML failures cleanly without fake 0.5 probability', async () => {

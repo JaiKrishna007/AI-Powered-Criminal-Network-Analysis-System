@@ -63,15 +63,25 @@ export function extractAndVerifyAuthContext(headers: Record<string, string | str
   const contextJson = Buffer.from(contextStr, 'base64').toString('utf8');
   const parsed = JSON.parse(contextJson);
 
-  // Normalize required fields
+  // Validate required fields
+  if (!parsed.user_id && !parsed.actor_id) {
+    throw new Error('FORBIDDEN: Missing user_id or actor_id in AuthContext');
+  }
+  if (!parsed.case_id) {
+    throw new Error('FORBIDDEN: Missing case_id in AuthContext');
+  }
+  if (!parsed.role) {
+    throw new Error('FORBIDDEN: Missing role in AuthContext');
+  }
+
   const authContext: AuthContext = {
-    user_id: parsed.user_id || parsed.actor_id || 'anonymous',
-    actor_id: parsed.actor_id || parsed.user_id || 'anonymous',
-    role: parsed.role || 'INVESTIGATOR',
-    case_id: parsed.case_id || '',
+    user_id: parsed.user_id || parsed.actor_id,
+    actor_id: parsed.actor_id || parsed.user_id,
+    role: parsed.role,
+    case_id: parsed.case_id,
     allowed_case_ids: Array.isArray(parsed.allowed_case_ids) 
       ? parsed.allowed_case_ids 
-      : (parsed.case_id ? [parsed.case_id] : []),
+      : [parsed.case_id],
     access_level: parsed.access_level || 'READ',
     correlation_id: parsed.correlation_id || ''
   };

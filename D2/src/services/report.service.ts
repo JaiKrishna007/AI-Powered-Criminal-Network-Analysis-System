@@ -147,6 +147,10 @@ export class ReportService {
     return new Promise<string>((resolve, reject) => {
       try {
         const doc = new PDFDocument({ margin: 50 });
+        const dir = require('path').dirname(filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
         const writeStream = fs.createWriteStream(filePath);
         
         doc.pipe(writeStream);

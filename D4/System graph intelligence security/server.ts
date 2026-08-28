@@ -58,6 +58,9 @@ app.post('/sync/relationship', async (req, res) => {
   }
 });
 
+import { InMemoryEvidenceRepository } from './lib/evidence/in_memory_repository.js';
+const evidenceRepo = new InMemoryEvidenceRepository();
+
 // 3. Sync Evidence Endpoint
 app.post('/sync/evidence', async (req, res) => {
   try {
@@ -67,6 +70,8 @@ app.post('/sync/evidence', async (req, res) => {
     if (!evidence.case_id || !auth.allowed_case_ids.includes(evidence.case_id)) {
       throw new Error(`Unauthorized access to case_id: ${evidence.case_id}`);
     }
+
+    await evidenceRepo.save(evidence);
 
     await auditLogger.log(
       auth.actor_id,
