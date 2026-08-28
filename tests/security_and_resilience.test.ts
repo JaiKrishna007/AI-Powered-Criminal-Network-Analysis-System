@@ -326,5 +326,94 @@ describe('Security & Resilience Verification (Issues 41 - 44)', () => {
 
       expect(ingestRes.status).toBe(403);
     });
+
+    it('Issue 1: ML mock service verifies HMAC and fails closed (missing or invalid headers return 403)', async () => {
+      const { createMockApps } = await import('../src/mock_services/server');
+      const apps = createMockApps();
+      const mlApp = apps.ml;
+
+      // 1. Missing authorization headers -> 403
+      const missingRes = await request(mlApp)
+        .post('/predict/entity-match')
+        .send({ name1: 'John', name2: 'John' });
+
+      expect(missingRes.status).toBe(403);
+      expect(missingRes.body.error).toBe('FORBIDDEN');
+
+      // 2. Invalid signature -> 403
+      const invalidRes = await request(mlApp)
+        .post('/predict/entity-match')
+        .set('X-Authorization-Context', Buffer.from(JSON.stringify({ user_id: 'USR-1' })).toString('base64'))
+        .set('X-Authorization-Signature', 'invalid-fake-signature')
+        .send({ name1: 'John', name2: 'John' });
+
+      expect(invalidRes.status).toBe(403);
+      expect(invalidRes.body.error).toBe('FORBIDDEN');
+
+      // 3. Valid signed headers -> 200
+      const { signAuthContext } = await import('../src/utils/security');
+      const { contextHeader, signatureHeader } = signAuthContext({ user_id: 'USR-OFFICER-A' });
+
+      const validRes = await request(mlApp)
+        .post('/predict/entity-match')
+        .set('X-Authorization-Context', contextHeader)
+        .set('X-Authorization-Signature', signatureHeader)
+        .send({ name1: 'John', name2: 'John', phone1: '555-0100', phone2: '555-0100' });
+
+      expect(validRes.status).toBe(200);
+      expect(validRes.body.probability).toBeGreaterThan(0.8);
+    });
+
+    it('Issues 5, 6, 7: Relationship routes enforce case authorization, dynamic access level, and evidence classification', async () => {
+      // 1. Unauthorized case query -> 403
+      const unauthRel = await request(app)
+        .get('/api/relationships/REL-123?case_id=CASE-BETA')
+        .set('x-user-id', 'USR-OFFICER-A');
+
+      expect(unauthRel.status).toBe(403);
+      expect(unauthRel.body.error).toBe('FORBIDDEN');
+
+      // 2. Evidence Explorer filters out restricted evidence above user clearance
+      const topSecretEvId = `EVD-TS-REL-${Date.now()}`;
+      await db.createEvidence({
+        id: topSecretEvId,
+        case_id: 'CASE-ALPHA',
+        source_type: 'Text',
+        source_ref: 'top_secret_intercept.txt',
+        storage_uri: 'local://top_secret_intercept.txt',
+        sha256: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+        classification: 'TOP_SECRET' // Level 4
+      });
+
+      const publicEvId = `EVD-PUB-REL-${Date.now()}`;
+      await db.createEvidence({
+        id: publicEvId,
+        case_id: 'CASE-ALPHA',
+        source_type: 'Text',
+        source_ref: 'public_record.txt',
+        storage_uri: 'local://public_record.txt',
+        sha256: 'b1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+        classification: 'RESTRICTED' // Level 2
+      });
+
+      // Mock GraphClient.getRelationship to return both evidence IDs
+      vi.spyOn(GraphClient, 'getRelationship').mockResolvedValueOnce({
+        id: 'REL-123',
+        source_id: 'ENT-1',
+        target_id: 'ENT-2',
+        type: 'CALLED',
+        evidence_ids: [topSecretEvId, publicEvId]
+      });
+
+      // Officer Alpha has level 2 clearance -> Only gets publicEvId
+      const explorerRes = await request(app)
+        .get('/api/relationships/REL-123/evidence?case_id=CASE-ALPHA')
+        .set('x-user-id', 'USR-OFFICER-A');
+
+      expect(explorerRes.status).toBe(200);
+      const returnedIds = explorerRes.body.evidence.map((e: any) => e.id);
+      expect(returnedIds).toContain(publicEvId);
+      expect(returnedIds).not.toContain(topSecretEvId);
+    });
   });
 });

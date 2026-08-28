@@ -9,19 +9,21 @@ function authVerificationMiddleware(req: Request, res: Response, next: NextFunct
   const contextStr = (req.headers['x-authorization-context'] as string) || '';
   const signatureStr = (req.headers['x-authorization-signature'] as string) || '';
 
-  // If signature is provided, verify it
-  if (contextStr && signatureStr) {
-    const isValid = verifyAuthContext(contextStr, signatureStr);
-    if (!isValid) {
-      return res.status(403).json({ error: 'FORBIDDEN', message: 'Invalid HMAC signature on authorization context' });
-    }
+  if (!contextStr || !signatureStr) {
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'Missing internal authorization context or signature headers' });
+  }
+
+  const isValid = verifyAuthContext(contextStr, signatureStr);
+  if (!isValid) {
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'Invalid HMAC signature on authorization context' });
   }
   next();
 }
 
-function createMLApp() {
+export function createMLApp() {
   const app = express();
   app.use(express.json());
+  app.use(authVerificationMiddleware);
 
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', service: 'ml_service' });
@@ -56,7 +58,7 @@ function createMLApp() {
   return app;
 }
 
-function createD3App() {
+export function createD3App() {
   const app = express();
   app.use(express.json());
   app.use(authVerificationMiddleware);
@@ -115,7 +117,7 @@ function createD3App() {
   return app;
 }
 
-function createD4App() {
+export function createD4App() {
   const app = express();
   app.use(express.json());
   app.use(authVerificationMiddleware);
@@ -217,28 +219,38 @@ const mlPort = parseInt(process.env.ML_PORT || process.env.PORT || '8001', 10);
 const d3Port = parseInt(process.env.D3_PORT || process.env.PORT || '8002', 10);
 const d4Port = parseInt(process.env.D4_PORT || process.env.PORT || '8003', 10);
 
-if (serviceType === 'ml') {
-  const app = createMLApp();
-  app.listen(mlPort, '0.0.0.0', () => {
-    console.log(`[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${mlPort}`);
-  });
-} else if (serviceType === 'd3') {
-  const app = createD3App();
-  app.listen(d3Port, '0.0.0.0', () => {
-    console.log(`[D3 Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${d3Port}`);
-  });
-} else if (serviceType === 'd4') {
-  const app = createD4App();
-  app.listen(d4Port, '0.0.0.0', () => {
-    console.log(`[D4 Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${d4Port}`);
-  });
-} else {
-  // Run all mock services simultaneously for development and demo harness
-  const ml = createMLApp();
-  const d3 = createD3App();
-  const d4 = createD4App();
+export function createMockApps() {
+  return {
+    ml: createMLApp(),
+    d3: createD3App(),
+    d4: createD4App()
+  };
+}
 
-  ml.listen(8001, '0.0.0.0', () => console.log('[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8001'));
-  d3.listen(8002, '0.0.0.0', () => console.log('[D3 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8002'));
-  d4.listen(8003, '0.0.0.0', () => console.log('[D4 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8003'));
+if (require.main === module) {
+  if (serviceType === 'ml') {
+    const app = createMLApp();
+    app.listen(mlPort, '0.0.0.0', () => {
+      console.log(`[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${mlPort}`);
+    });
+  } else if (serviceType === 'd3') {
+    const app = createD3App();
+    app.listen(d3Port, '0.0.0.0', () => {
+      console.log(`[D3 Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${d3Port}`);
+    });
+  } else if (serviceType === 'd4') {
+    const app = createD4App();
+    app.listen(d4Port, '0.0.0.0', () => {
+      console.log(`[D4 Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${d4Port}`);
+    });
+  } else {
+    // Run all mock services simultaneously for development and demo harness
+    const ml = createMLApp();
+    const d3 = createD3App();
+    const d4 = createD4App();
+
+    ml.listen(8001, '0.0.0.0', () => console.log('[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8001'));
+    d3.listen(8002, '0.0.0.0', () => console.log('[D3 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8002'));
+    d4.listen(8003, '0.0.0.0', () => console.log('[D4 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8003'));
+  }
 }

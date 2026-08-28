@@ -26,6 +26,23 @@ export const startReportWorker = () => {
     reportWorker = new Worker('reportQueue', async (job) => {
       const { reportId, caseId, userContext, version, params } = job.data;
       
+      // 1. Verify user still exists and is ACTIVE (Issue 10)
+      const user = await db.getUser(userContext.user_id);
+      if (!user || user.status !== 'ACTIVE') {
+        throw new Error(`User ${userContext.user_id} is inactive or does not exist`);
+      }
+
+      // 2. Verify case access is still authorized (Issue 10)
+      const { AuthMiddleware } = await import('../middleware/auth.js');
+      try {
+        await AuthMiddleware.authorizeCaseAccess({
+          userId: user.id,
+          caseId
+        });
+      } catch {
+        throw new Error(`User ${user.id} is no longer authorized for case ${caseId}`);
+      }
+
       const caseObj = await db.getCase(caseId);
       if (!caseObj) {
         throw new Error(`Case ${caseId} not found`);

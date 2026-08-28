@@ -4,14 +4,24 @@ import { MLResponseSchema, AnomalyResponseSchema } from '../contracts';
 
 const getMLUrl = () => process.env.ML_SERVICE_URL || 'http://localhost:8001';
 
+import { signAuthContext } from '../utils/security';
+
 export class MLClient {
   static async fetchML(endpoint: string, payload: any, timeoutMs: number = 10000) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const { contextHeader, signatureHeader } = signAuthContext({
+        service: 'D2_CONTROL_PLANE',
+        timestamp: new Date().toISOString(),
+        correlation_id: payload?.correlation_id
+      });
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'X-Authorization-Context': contextHeader,
+        'X-Authorization-Signature': signatureHeader
       };
 
       if (payload?.correlation_id) {

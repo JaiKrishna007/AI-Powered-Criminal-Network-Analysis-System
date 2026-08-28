@@ -18,19 +18,29 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next) => {
       return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'case_id query parameter is required for authorization' });
     }
 
-    // Authorize case
-    if (!req.user!.roles.includes('SYSTEM ADMIN')) {
-      const hasAccess = await db.isUserMemberOfCase(req.user!.id, caseId);
-      if (!hasAccess) {
-        return res.status(403).json({ error: 'FORBIDDEN', message: 'Not authorized for this case scope' });
-      }
+    // Centralized case authorization (Issue 6)
+    try {
+      await AuthMiddleware.authorizeCaseAccess({
+        userId: req.user!.id,
+        caseId
+      });
+    } catch (authErr: any) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: authErr.message || 'Not authorized for this case scope' });
     }
+
+    // Dynamic case access level resolution (Issue 5)
+    const member = await db.getCaseMember(caseId, req.user!.id);
+    const effectiveRole = req.user!.roles.includes('SYSTEM ADMIN')
+      ? 'SYSTEM ADMIN'
+      : req.user!.roles.includes('SUPERVISOR')
+      ? 'SUPERVISOR'
+      : 'INVESTIGATOR';
 
     const context = {
       user_id: req.user!.id,
-      role: req.user!.roles[0],
+      role: effectiveRole,
       case_id: caseId,
-      access_level: 'MEMBER'
+      access_level: member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR')
     };
 
     // Retrieve relationship metadata from D4
@@ -54,30 +64,50 @@ router.get('/:id/evidence', async (req: AuthenticatedRequest, res: Response, nex
       return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'case_id query parameter is required for authorization' });
     }
 
-    if (!req.user!.roles.includes('SYSTEM ADMIN')) {
-      const hasAccess = await db.isUserMemberOfCase(req.user!.id, caseId);
-      if (!hasAccess) {
-        return res.status(403).json({ error: 'FORBIDDEN', message: 'Not authorized for this case scope' });
-      }
+    // Centralized case authorization (Issue 6)
+    try {
+      await AuthMiddleware.authorizeCaseAccess({
+        userId: req.user!.id,
+        caseId
+      });
+    } catch (authErr: any) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: authErr.message || 'Not authorized for this case scope' });
     }
+
+    // Dynamic case access level resolution (Issue 5)
+    const member = await db.getCaseMember(caseId, req.user!.id);
+    const effectiveRole = req.user!.roles.includes('SYSTEM ADMIN')
+      ? 'SYSTEM ADMIN'
+      : req.user!.roles.includes('SUPERVISOR')
+      ? 'SUPERVISOR'
+      : 'INVESTIGATOR';
 
     const context = {
       user_id: req.user!.id,
-      role: req.user!.roles[0],
+      role: effectiveRole,
       case_id: caseId,
-      access_level: 'MEMBER'
+      access_level: member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR')
     };
 
     // 1. Get relationship
     const relationship = await GraphClient.getRelationship(context, req.params.id);
     const evidenceIds: string[] = relationship.evidence_ids || [];
 
-    // 2. Fetch evidence metadata
+    // 2. Fetch and filter evidence by user clearance / classification (Issue 7)
     const evidenceList = [];
     for (const evId of evidenceIds) {
       const ev = await db.getEvidence(evId);
       if (ev && ev.case_id === caseId) {
-        evidenceList.push(ev);
+        try {
+          await AuthMiddleware.authorizeCaseAccess({
+            userId: req.user!.id,
+            caseId,
+            classification: ev.classification
+          });
+          evidenceList.push(ev);
+        } catch {
+          // Excluded due to insufficient clearance
+        }
       }
     }
 

@@ -193,8 +193,17 @@ export class ReportService {
             doc.text(`Classification Level: ${caseObj.classification}`);
             doc.moveDown();
 
-            // Section 3: Data Sources
-            const evidenceList = await db.getEvidenceByCase(caseObj.id);
+            // Section 3: Data Sources (Issue 8: Authorized Evidence by Clearance)
+            const user = await db.getUser(authCtx.user_id);
+            const userClearance = user?.clearance_level ?? 2;
+            const userRoles = await db.getUserRoles(authCtx.user_id);
+
+            const evidenceList = await db.getAuthorizedEvidenceByCase({
+              user_id: authCtx.user_id,
+              clearance_level: userClearance,
+              roles: userRoles
+            }, caseObj.id);
+
             doc.fontSize(14).text('3. Data Sources', { underline: true });
             doc.moveDown(0.3);
             if (evidenceList.length === 0) {
