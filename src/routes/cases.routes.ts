@@ -272,7 +272,8 @@ router.post('/:case_id/reports', AuthMiddleware.requireCaseAccess, AuditMiddlewa
   try {
     const { parameters } = req.body;
     const { ReportService } = await import('../services/report.service.js');
-    const report = await ReportService.generateCaseReport(req.params.case_id, req.user!.id, parameters || {});
+    const authContext = buildAuthContext(req, req.params.case_id);
+    const report = await ReportService.generateCaseReport(authContext, parameters || {});
     return res.status(202).json({ 
       report_id: report.id,
       status: report.status

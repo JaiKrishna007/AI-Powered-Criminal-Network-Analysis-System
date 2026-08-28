@@ -515,6 +515,26 @@ export class ControlPlaneDB {
     return rep;
   }
 
+  public async updateReport(id: string, updates: Record<string, any>): Promise<any> {
+    if (this.isTestEnv) {
+      if (!this.testReports) this.testReports = new Map();
+      const existing = this.testReports.get(id);
+      if (existing) {
+        Object.assign(existing, updates);
+        return existing;
+      }
+      return null;
+    }
+    const res = await this.getCollection('reports').findOneAndUpdate(
+      { id },
+      { $set: updates },
+      { returnDocument: 'after' }
+    );
+    if (!res) return null;
+    const { _id, ...rep } = res as any;
+    return rep;
+  }
+
   public async resetDb(): Promise<void> {
     this.testUsers.clear();
     this.testUserRoles = [];

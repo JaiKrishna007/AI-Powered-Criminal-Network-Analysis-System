@@ -8,6 +8,10 @@
     "build": "tsc -p tsconfig.backend.json",
     "start": "node dist/server.js",
     "dev": "ts-node -P tsconfig.backend.json src/server.ts",
+    "mock:ml": "node dist/mock_services/server.js ml",
+    "mock:d3": "node dist/mock_services/server.js d3",
+    "mock:d4": "node dist/mock_services/server.js d4",
+    "mock:all": "node dist/mock_services/server.js all",
     "test": "vitest run"
   },
   "dependencies": {

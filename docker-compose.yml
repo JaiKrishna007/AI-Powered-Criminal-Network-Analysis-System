@@ -66,20 +66,35 @@ services:
       - netra
 
   ml_service:
-    image: alpine:latest
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    build: .
+    command: ["npm", "run", "mock:ml"]
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - SERVICE_TYPE=ml
     networks:
       - netra
 
   d3_service:
-    image: alpine:latest
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    build: .
+    command: ["npm", "run", "mock:d3"]
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - SERVICE_TYPE=d3
     networks:
       - netra
 
   d4_service:
-    image: alpine:latest
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    build: .
+    command: ["npm", "run", "mock:d4"]
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - SERVICE_TYPE=d4
     networks:
       - netra
 

@@ -86,6 +86,7 @@ export const ReportSchema = z.object({
   version: z.number().int().default(1),
   base_report_id: ReportIdSchema.optional(),
   parameters: z.record(z.string(), z.any()).optional(),
+  error: z.string().optional(),
   created_at: TimestampSchema
 });
 
