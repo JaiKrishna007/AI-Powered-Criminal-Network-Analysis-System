@@ -88,54 +88,54 @@ export default function CaseShell({
   };
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 font-sans">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 border-r border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md flex flex-col z-20">
+    <div className="flex h-screen bg-[#F4F6F9] text-slate-800 font-sans">
+      {/* Sidebar Navigation - Navy Sidebar */}
+      <aside className="w-64 bg-[#0F172A] flex flex-col z-20 text-slate-300">
         {/* Brand Logo & Security Header */}
-        <div className="p-5 border-b border-zinc-800/80 flex flex-col gap-2 bg-zinc-900/60">
+        <div className="p-5 border-b border-slate-800 flex flex-col gap-2 bg-[#0F172A]">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-lg text-white shadow-md shadow-indigo-600/30">
+            <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center font-bold text-lg text-white shadow-md shadow-blue-600/30">
               AG
             </div>
             <div>
-              <h1 className="font-bold text-sm tracking-wide bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
-                ANTIGRAVITY
+              <h1 className="font-bold text-sm tracking-wide text-white">
+                NETRA
               </h1>
-              <p className="text-[10px] text-zinc-500 font-medium tracking-widest uppercase">
+              <p className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">
                 CRIMINAL INTELLIGENCE
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-red-950/30 border border-red-900/30 text-red-400 text-[10px] font-bold mt-2 uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-red-950/40 border border-red-900/40 text-red-400 text-[10px] font-bold mt-2 uppercase tracking-wider">
             <ShieldAlert size={12} className="shrink-0 animate-pulse" />
             <span>Classified: Restricted</span>
           </div>
         </div>
 
         {/* Case Switcher */}
-        <div className="p-4 border-b border-zinc-800/50 relative">
-          <label className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase mb-1 block">
+        <div className="p-4 border-b border-slate-800 relative">
+          <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1 block">
             Active Case Workspace
           </label>
           {loading ? (
-            <div className="h-10 rounded bg-zinc-800/40 animate-pulse flex items-center px-3">
-              <RefreshCw size={14} className="animate-spin text-zinc-500 mr-2" />
-              <span className="text-xs text-zinc-500">Loading cases...</span>
+            <div className="h-10 rounded bg-slate-800/40 animate-pulse flex items-center px-3">
+              <RefreshCw size={14} className="animate-spin text-slate-500 mr-2" />
+              <span className="text-xs text-slate-500">Loading cases...</span>
             </div>
           ) : (
             <div>
               <button
                 onClick={() => setShowCaseSelector(!showCaseSelector)}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition text-left text-xs font-semibold text-zinc-200"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition text-left text-xs font-semibold text-slate-200"
               >
                 <span className="truncate">
                   {activeCase ? activeCase.title : 'Select a Case'}
                 </span>
-                <ChevronDown size={14} className="text-zinc-500 ml-1" />
+                <ChevronDown size={14} className="text-slate-500 ml-1" />
               </button>
 
               {showCaseSelector && (
-                <div className="absolute top-[68px] left-4 right-4 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden z-30">
+                <div className="absolute top-[68px] left-4 right-4 bg-slate-900 border border-slate-800 rounded-lg shadow-xl overflow-hidden z-30">
                   {cases.map((c) => (
                     <button
                       key={c.id}
@@ -143,12 +143,12 @@ export default function CaseShell({
                         setActiveCaseId(c.id);
                         setShowCaseSelector(false);
                       }}
-                      className={`w-full text-left px-4 py-3 text-xs hover:bg-zinc-800/60 border-b border-zinc-800 last:border-b-0 transition flex flex-col gap-1 ${
-                        activeCaseId === c.id ? 'bg-zinc-800/40 border-l-2 border-l-indigo-500' : ''
+                      className={`w-full text-left px-4 py-3 text-xs hover:bg-slate-800/60 border-b border-slate-800 last:border-b-0 transition flex flex-col gap-1 ${
+                        activeCaseId === c.id ? 'bg-slate-800/40 border-l-2 border-l-blue-500' : ''
                       }`}
                     >
                       <span className="font-semibold text-zinc-200">{c.title}</span>
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wider">
                         Classification: {c.classification.replace('_', ' ')}
                       </span>
                     </button>
@@ -170,61 +170,62 @@ export default function CaseShell({
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition ${
                   isActive
-                    ? 'bg-indigo-600/15 border border-indigo-500/20 text-indigo-400 font-semibold'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-[#2563EB] text-white font-bold'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <Icon size={16} className={isActive ? 'text-indigo-400' : 'text-zinc-500'} />
+                <Icon size={16} className={isActive ? 'text-white' : 'text-slate-500'} />
                 <span>{item.label}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* Investigator RBAC Status Header */}
-        <div className="p-4 border-t border-zinc-800/80 bg-zinc-900/30 flex items-center justify-between text-xs">
+        {/* Investigator Status Footer */}
+        <div className="p-4 border-t border-slate-800 bg-[#0B132B] flex items-center justify-between text-xs text-white">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-300">
+            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-300">
               A
             </div>
             <div>
               <p className="font-semibold text-zinc-200">Arash</p>
-              <p className="text-[10px] text-zinc-500 font-medium">Investigator</p>
+              <p className="text-[10px] text-slate-400 font-medium">Investigator</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-green-500 text-[10px] font-bold bg-green-950/20 border border-green-900/30 px-2 py-0.5 rounded uppercase">
+          <div className="flex items-center gap-1 text-emerald-400 text-[10px] font-bold bg-emerald-950/20 border border-emerald-900/30 px-2 py-0.5 rounded uppercase">
             <UserCheck size={10} />
             <span>Authorized</span>
           </div>
         </div>
       </aside>
 
-      {/* Main Panel Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#F4F6F9]">
         {/* Top Header Panel */}
-        <header className="h-16 border-b border-zinc-800/80 bg-zinc-900/20 backdrop-blur-md flex items-center justify-between px-6 z-10">
+        <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 z-10 shadow-sm">
           {/* Ask/Search query bar */}
           <form onSubmit={handleSearchSubmit} className="relative w-96 max-w-lg">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Ask / Search: e.g. Rohan Mehta or TXN-8819..."
+              placeholder="Search entities, cases, evidence..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-lg text-xs bg-zinc-900/50 border border-zinc-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-100 transition"
+              className="w-full pl-9 pr-4 py-2 rounded-lg text-xs bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-800 transition placeholder-slate-400"
             />
           </form>
 
-          {/* Classification Banner */}
-          <div className="flex items-center gap-4 text-xs font-semibold text-zinc-400">
+          {/* Classification & Security Banner */}
+          <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
             {activeCase && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                <span>Active Database: {activeCase.id}</span>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                <span className="font-mono">Active: {activeCase.id}</span>
               </div>
             )}
-            <div className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[10px] tracking-wider uppercase font-bold text-indigo-400">
-              RBAC Scope: INVESTIGATOR
+            <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] tracking-wider uppercase font-bold text-emerald-700 flex items-center gap-1.5 shadow-sm">
+              <UserCheck size={12} />
+              <span>Secure Environment</span>
             </div>
           </div>
         </header>

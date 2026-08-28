@@ -81,29 +81,29 @@ export default function TimelineBar({
   };
 
   return (
-    <div className="w-full p-4 rounded-xl glass-panel border border-zinc-800/80 flex flex-col gap-3">
+    <div className="w-full p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-3">
       {/* Header controls details */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-indigo-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+          <Calendar size={16} className="text-blue-600" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
             Temporal Activity Timeline
           </h3>
         </div>
-        <div className="flex items-center gap-4 text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-          <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-850">
+        <div className="flex items-center gap-4 text-[10px] uppercase font-bold tracking-wider text-slate-500">
+          <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm">
             <span>Range:</span>
-            <span className="text-indigo-400 font-mono">
+            <span className="text-blue-600 font-mono">
               {formatDateReadable(startDate)}
             </span>
-            <span className="text-zinc-500 font-normal">to</span>
-            <span className="text-indigo-400 font-mono">
+            <span className="text-slate-400 font-normal">to</span>
+            <span className="text-blue-600 font-mono">
               {formatDateReadable(endDate)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-850">
+          <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm">
             <span>Active Links:</span>
-            <span className="text-indigo-400 font-mono">
+            <span className="text-blue-600 font-mono">
               {filteredCount} / {totalCount}
             </span>
           </div>
@@ -114,18 +114,18 @@ export default function TimelineBar({
       <div className="h-20 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 5, right: 10, left: -30, bottom: 0 }}>
-            <XAxis dataKey="label" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#71717a' }} />
-            <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#71717a' }} allowDecimals={false} />
+            <XAxis dataKey="label" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#64748B' }} />
+            <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#64748B' }} allowDecimals={false} />
             <Tooltip
-              contentStyle={{ background: '#18181b', borderColor: 'rgba(255,255,255,0.08)', borderRadius: '8px' }}
-              labelStyle={{ fontSize: '10px', color: '#a1a1aa', fontWeight: 'bold' }}
-              itemStyle={{ fontSize: '10px', color: '#818cf8' }}
+              contentStyle={{ background: '#FFFFFF', borderColor: '#E2E8F0', borderRadius: '8px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}
+              labelStyle={{ fontSize: '10px', color: '#334155', fontWeight: 'bold' }}
+              itemStyle={{ fontSize: '10px', color: '#2563EB' }}
             />
             <Bar 
               dataKey="events" 
               radius={[4, 4, 0, 0]}
-              fill="#4f46e5"
-              fillOpacity={0.6}
+              fill="#2563EB"
+              fillOpacity={0.8}
             />
           </BarChart>
         </ResponsiveContainer>
@@ -133,10 +133,10 @@ export default function TimelineBar({
 
       {/* Interactive Range Sliders */}
       <div className="relative pt-2 px-1 flex flex-col gap-2">
-        <div className="relative h-2 rounded bg-zinc-950 border border-zinc-850">
+        <div className="relative h-2 rounded bg-slate-105 border border-slate-200">
           {/* Visual track between start and end indexes */}
           <div 
-            className="absolute h-full bg-indigo-500/20"
+            className="absolute h-full bg-blue-600/20"
             style={{
               left: `${(startIndex / (dateMap.length - 1)) * 100}%`,
               right: `${100 - (endIndex / (dateMap.length - 1)) * 100}%`
@@ -165,14 +165,14 @@ export default function TimelineBar({
         />
 
         {/* Range controls handle positioning overlay */}
-        <div className="flex justify-between text-[9px] text-zinc-500 font-mono px-1">
+        <div className="flex justify-between text-[9px] text-slate-400 font-mono px-1">
           {chartData.map((d) => (
             <span 
               key={d.date} 
               className={`${
                 d.date === startDate || d.date === endDate 
-                  ? 'text-indigo-400 font-bold' 
-                  : ''
+                  ? 'text-blue-600 font-bold' 
+                  : 'text-slate-300'
               }`}
             >
               |
@@ -182,8 +182,8 @@ export default function TimelineBar({
       </div>
       
       {/* Temporal Diff Alerts */}
-      <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-semibold px-1">
-        <AlertCircle size={12} className="text-zinc-600 shrink-0" />
+      <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-semibold px-1">
+        <AlertCircle size={12} className="text-slate-400 shrink-0" />
         <span>Sliding timeline filters edges in the relationship graph. Spikes indicate dates with matching synthetic logs.</span>
       </div>
     </div>
