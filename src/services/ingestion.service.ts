@@ -80,10 +80,10 @@ export class IngestionService {
         storageUri = existingEv.storage_uri;
       }
     } else {
-      // 6. Store original artifact using EVD ID (Issue 46)
+      // 6. Store original artifact using EVD ID and case-scoped key
       try {
         const ext = payload.source_type.toLowerCase();
-        const storeResult = await EvidenceService.storeOriginalEvidence(evidenceId, contentBuffer, ext);
+        const storeResult = await EvidenceService.storeOriginalEvidence(evidenceId, contentBuffer, ext, payload.case_id);
         storageUri = storeResult.storage_uri;
       } catch (e: any) {
         throw { code: 'STORAGE_ERROR', message: `Failed to store evidence: ${e.message}` };

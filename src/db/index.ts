@@ -40,14 +40,30 @@ export class ControlPlaneDB {
     }
   }
 
-  public async connect(): Promise<void> {
+  public async connect(maxRetries: number = 5, retryDelayMs: number = 1000): Promise<void> {
     if (this.isTestEnv) return;
     
-    // 1. Connect and Ping (Task 30)
-    await mongoClient.connect();
-    const dbName = process.env.MONGODB_DB || 'netra';
-    this.db = mongoClient.db(dbName);
-    await this.db.command({ ping: 1 }); // Ensures availability
+    // 1. Connect and Ping with retry backoff for container startup readiness (Issue 30)
+    let lastErr: any = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await mongoClient.connect();
+        const dbName = process.env.MONGODB_DB || 'netra';
+        this.db = mongoClient.db(dbName);
+        await this.db.command({ ping: 1 }); // Ensures availability
+        break;
+      } catch (err: any) {
+        lastErr = err;
+        console.warn(`MongoDB connection attempt ${attempt}/${maxRetries} failed: ${err.message}. Retrying in ${retryDelayMs * attempt}ms...`);
+        if (attempt < maxRetries) {
+          await new Promise(res => setTimeout(res, retryDelayMs * attempt));
+        }
+      }
+    }
+
+    if (!this.db) {
+      throw new Error(`Failed to connect to MongoDB after ${maxRetries} attempts: ${lastErr?.message}`);
+    }
     
     // 2. Setup Indexes (Task 28)
     if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DB_MIGRATION === 'true') {

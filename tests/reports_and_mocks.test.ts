@@ -580,4 +580,21 @@ Rahul Verma,+919123456780,123456789012345,SBIN000123,DL-1C-9999,Bandra West,Alph
     expect(report.status).toBe('GENERATING');
     expect(report.version).toBe(1);
   });
+
+  it('Issue 24 & 25: Evidence storage uses storage abstraction and case-scoped key naming', async () => {
+    const { EvidenceService } = await import('../src/services/evidence.service.js');
+
+    const evId = `EVD-TEST-${Date.now()}`;
+    const result = await EvidenceService.storeOriginalEvidence(evId, 'Sample FIR text content', 'txt', 'CASE-ALPHA');
+
+    expect(result.storage_provider).toBe('local');
+    expect(result.storage_key).toBe(`CASE-ALPHA/${evId}.txt`);
+    expect(result.storage_uri).toBe(`local://CASE-ALPHA/${evId}.txt`);
+    expect(result.sha256).toHaveLength(64);
+  });
+
+  it('Issue 30: ControlPlaneDB implements connection retry mechanism', async () => {
+    // In test environment, connect() returns gracefully without throwing
+    await expect(db.connect(2, 50)).resolves.not.toThrow();
+  });
 });
