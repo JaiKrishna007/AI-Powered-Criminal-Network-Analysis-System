@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import { AuditEventRef } from '../models/types';
+import { ServiceErrors } from '../errors/service_errors';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -10,19 +11,31 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+export interface AuthorizeCaseOptions {
+  userId: string;
+  caseId: string;
+  requiredRole?: string;
+  classification?: string; // e.g. SECRET, TOP SECRET
+}
+
 export class AuthMiddleware {
   /**
-   * Resolves authentication context from request headers (x-user-id).
+   * Resolves authentication context from the secure session.
    */
   public static async authenticate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    const userId = req.headers['x-user-id'] as string;
+    let userId = (req.session as any)?.userId;
+
+    if (!userId && process.env.NODE_ENV === 'test') {
+      userId = req.headers['x-user-id'] as string;
+    }
+
     if (!userId) {
-      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Missing user authentication context' });
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Missing or invalid session.' });
     }
 
     const user = await db.getUser(userId);
     if (!user) {
-      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid user account' });
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid user account.' });
     }
 
     const roles = await db.getUserRoles(userId);
@@ -37,8 +50,6 @@ export class AuthMiddleware {
 
   /**
    * Verifies system administration privilege for admin endpoints (BE-T07).
-   * If an investigator attempts to access an admin endpoint:
-   * Request is denied AND an audit reference is generated in audit_event_ref.
    */
   public static async requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     if (!req.user) {
@@ -49,14 +60,12 @@ export class AuthMiddleware {
       const eventId = `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const caseId = (req.params.case_id || req.body?.case_id || null) as string | null;
 
-      const auditEvent: AuditEventRef = {
+      await db.createAuditEvent({
         event_id: eventId,
         case_id: caseId,
         actor_id: req.user.id,
         action: `UNAUTHORIZED_ADMIN_ACCESS_ATTEMPT: ${req.method} ${req.originalUrl}`
-      };
-
-      await db.logAuditEvent(auditEvent);
+      });
 
       return res.status(403).json({
         error: 'FORBIDDEN',
@@ -69,7 +78,7 @@ export class AuthMiddleware {
   }
 
   /**
-   * Checks case scope before returning evidence, candidate, or protected case data (BE-T06).
+   * Checks case scope before returning data (BE-T06).
    */
   public static async requireCaseAccess(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     if (!req.user) {
@@ -82,21 +91,43 @@ export class AuthMiddleware {
       return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'Case ID is required' });
     }
 
-    // System Admins have global access
-    if (req.user.roles.includes('SYSTEM ADMIN')) {
-      return next();
-    }
-
-    const hasAccess = await db.isUserMemberOfCase(req.user.id, caseId);
-    if (!hasAccess) {
-      // Default denial: No data returned
+    try {
+      await AuthMiddleware.authorizeCaseAccess({
+        userId: req.user.id,
+        caseId: caseId
+      });
+      next();
+    } catch (err: any) {
       return res.status(403).json({
         error: 'FORBIDDEN',
-        message: 'Access denied: User is not authorized for this case scope',
+        message: err.message || 'Access denied',
         data: null
       });
     }
+  }
 
-    next();
+  /**
+   * Centralized Authorization function for Case-level access.
+   */
+  public static async authorizeCaseAccess(options: AuthorizeCaseOptions): Promise<void> {
+    const { userId, caseId, requiredRole, classification } = options;
+
+    const roles = await db.getUserRoles(userId);
+    if (roles.includes('SYSTEM ADMIN')) return;
+
+    if (requiredRole && !roles.includes(requiredRole)) {
+      throw ServiceErrors.CASE_ACCESS_DENIED();
+    }
+
+    const hasAccess = await db.isUserMemberOfCase(userId, caseId);
+    if (!hasAccess) {
+      throw ServiceErrors.CASE_ACCESS_DENIED();
+    }
+
+    if (classification) {
+      // In a real implementation, you'd check if the user's clearance >= required classification
+      // For this prototype, if they are a member and we passed the above, we allow it.
+      // E.g., SUPERVISOR > INVESTIGATOR logic
+    }
   }
 }

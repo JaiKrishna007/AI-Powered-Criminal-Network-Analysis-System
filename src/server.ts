@@ -1,5 +1,8 @@
 import app from './app';
 import { db } from './db';
+import { startIngestionWorker } from './workers/ingestion.queue';
+import { ExtractionService } from './services/extraction.service';
+import { DefaultExtractionWorker } from './workers/extraction_worker.adapter';
 
 const PORT = process.env.PORT || 3000;
 
@@ -7,6 +10,14 @@ async function start() {
   try {
     await db.connect();
     console.log('Connected to MongoDB');
+    
+    ExtractionService.registerWorker(new DefaultExtractionWorker());
+
+    if (process.env.NODE_ENV !== 'test') {
+      startIngestionWorker();
+      console.log('Started BullMQ Ingestion Worker');
+    }
+
     app.listen(PORT, () => {
       console.log(`Backend Developer 2 service running on port ${PORT} [PS26189-CONTRACT-v1]`);
     });

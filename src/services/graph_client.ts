@@ -1,0 +1,75 @@
+import { z } from 'zod';
+import { ServiceErrors, handleServiceError } from '../errors/service_errors';
+import { AuthContext } from './ai_client';
+
+const D4_URL = process.env.D4_SERVICE_URL || 'http://localhost:3004';
+
+const GraphResponseSchema = z.object({
+  nodes: z.array(z.any()),
+  edges: z.array(z.any())
+}).passthrough();
+
+const InsightResponseSchema = z.object({
+  insights: z.array(z.any())
+}).passthrough();
+
+export class GraphClient {
+  static async fetchD4(endpoint: string, context: AuthContext, payload: any, timeoutMs: number = 10000, schema?: z.ZodTypeAny) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${D4_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ context, ...payload }),
+        signal: controller.signal
+      });
+
+      clearTimeout(id);
+
+      if (!response.ok) {
+        throw ServiceErrors.GRAPH_SERVICE_UNAVAILABLE();
+      }
+
+      const data = await response.json();
+      
+      if (schema) {
+        const parsed = schema.safeParse(data);
+        if (!parsed.success) {
+          throw ServiceErrors.INVALID_SERVICE_RESPONSE(parsed.error);
+        }
+        return parsed.data;
+      }
+
+      return data;
+    } catch (error: any) {
+      clearTimeout(id);
+      if (error.name === 'AbortError') {
+        throw ServiceErrors.SERVICE_TIMEOUT('GRAPH_SERVICE');
+      }
+      throw handleServiceError(error);
+    }
+  }
+
+  static async getFocusedGraph(context: AuthContext, entityId: string, hops: number = 2) {
+    return await this.fetchD4('/graph/focused', context, { entityId, hops }, 10000, GraphResponseSchema);
+  }
+
+  static async getBridgeAnalysis(context: AuthContext) {
+    return await this.fetchD4('/analytics/bridge', context, {}, 15000, InsightResponseSchema);
+  }
+
+  static async getTemporalAnalysis(context: AuthContext, timeRange: any) {
+    return await this.fetchD4('/analytics/temporal', context, { timeRange }, 15000, InsightResponseSchema);
+  }
+
+  static async getRelationshipPath(context: AuthContext, sourceId: string, targetId: string) {
+    return await this.fetchD4('/graph/path', context, { sourceId, targetId }, 10000, GraphResponseSchema);
+  }
+  static async getRelationship(context: AuthContext, relationshipId: string) {
+    return await this.fetchD4(`/relationships/${relationshipId}`, context, {}, 10000);
+  }
+}

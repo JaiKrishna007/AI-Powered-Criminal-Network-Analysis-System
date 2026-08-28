@@ -102,7 +102,7 @@ Phone: +1-555-019-2834
 Location: Metro Sector 4`;
 
     const res = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -126,7 +126,7 @@ Location: Metro Sector 4`;
     const malformedCsv = `Name,Phone,Account\n"John Smith, +15550192834, ACC-999\nInvalid Quotes "Unclosed Row`;
 
     const res = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -145,7 +145,7 @@ Location: Metro Sector 4`;
 
     // First upload
     const res1 = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -159,7 +159,7 @@ Location: Metro Sector 4`;
 
     // Second upload with identical content
     const res2 = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -178,7 +178,7 @@ Location: Metro Sector 4`;
     const recordA = { name: 'Michael Corleone', phone: '+1-555-888-9999' };
     const recordB = { name: 'Michael Corleone', phone: '+1-555-888-9999' };
 
-    const evaluation = EntityResolutionService.evaluateCandidate('case-101', recordA, recordB);
+    const evaluation = await EntityResolutionService.evaluateCandidate('case-101', recordA, recordB);
 
     expect(evaluation.score).toBeGreaterThan(0.85);
     expect(evaluation.has_conflict).toBe(false);
@@ -186,7 +186,7 @@ Location: Metro Sector 4`;
     // Ingestion test verifying candidate is stored in CANDIDATE state
     const jsonContent = JSON.stringify([recordA, recordB]);
     const res = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -206,7 +206,7 @@ Location: Metro Sector 4`;
     const recordA = { name: 'Jonathon Smith', phone: '+1-555-111-2222' };
     const recordB = { name: 'Jonathan Smith', phone: '+1-555-999-8888' }; // Conflicting phone
 
-    const evaluation = EntityResolutionService.evaluateCandidate('case-101', recordA, recordB);
+    const evaluation = await EntityResolutionService.evaluateCandidate('case-101', recordA, recordB);
 
     expect(evaluation.has_conflict).toBe(true);
     expect(evaluation.auto_merge_allowed).toBe(false);
@@ -214,7 +214,7 @@ Location: Metro Sector 4`;
     // Ingestion test verifying conflict flag is stored and candidate remains in CANDIDATE state
     const jsonContent = JSON.stringify([recordA, recordB]);
     const res = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -233,7 +233,7 @@ Location: Metro Sector 4`;
   it('BE-T06 — Out-of-scope case access returns no evidence data', async () => {
     // user-unauthorized is NOT a member of case-101
     const res = await request(app)
-      .get('/api/v1/evidence/case/case-101')
+      .get('/api/cases/case-101/evidence')
       .set('x-user-id', 'user-unauthorized');
 
     expect(res.status).toBe(403);
@@ -243,7 +243,7 @@ Location: Metro Sector 4`;
   // BE-T07: Admin endpoint by investigator
   it('BE-T07 — Investigator attempting admin endpoint is denied and generates audit reference', async () => {
     const res = await request(app)
-      .get('/api/v1/admin/users')
+      .get('/api/admin/users')
       .set('x-user-id', 'user-investigator'); // Investigator, not SYSTEM ADMIN
 
     expect(res.status).toBe(403);
@@ -264,7 +264,7 @@ Location: Metro Sector 4`;
     const jsonContent = JSON.stringify([record]);
 
     const ingestRes = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -277,7 +277,7 @@ Location: Metro Sector 4`;
 
     // user-unauthorized is NOT a member of case-101
     const reviewRes = await request(app)
-      .post('/api/v1/entity/reviews')
+      .post('/api/cases/case-101/entities/resolve')
       .set('x-user-id', 'user-unauthorized')
       .send({
         candidate_id: candidateId,
@@ -293,7 +293,7 @@ Location: Metro Sector 4`;
     const jsonContent = JSON.stringify([record]);
 
     const ingestRes = await request(app)
-      .post('/api/v1/evidence/ingest')
+      .post('/api/cases/case-101/ingestions')
       .set('x-user-id', 'user-investigator')
       .send({
         case_id: 'case-101',
@@ -306,7 +306,7 @@ Location: Metro Sector 4`;
 
     // Authorized investigator submits review decision
     const reviewRes = await request(app)
-      .post('/api/v1/entity/reviews')
+      .post('/api/cases/case-101/entities/resolve')
       .set('x-user-id', 'user-investigator')
       .send({
         candidate_id: candidateId,

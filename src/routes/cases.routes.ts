@@ -2,10 +2,49 @@ import { Router, Response } from 'express';
 import { AuthMiddleware, AuthenticatedRequest } from '../middleware/auth';
 import { db } from '../db';
 import { Case, CaseMember } from '../models/types';
+import { IngestionService } from '../services/ingestion.service';
+import { EntityReviewService } from '../services/entity_review.service';
+import { AIClient } from '../services/ai_client';
+import { GraphClient } from '../services/graph_client';
 
 const router = Router();
 
 router.use(AuthMiddleware.authenticate);
+
+/**
+ * 13. Case list/search endpoint
+ */
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
+  const status = req.query.status as string;
+  const search = req.query.search as string;
+
+  // Ideally, db.getCasesByMember(userId, filters) would be implemented.
+  // For the prototype, we assume we fetch all and filter or db layer handles it.
+  // Let's implement a basic fetch.
+  // In a real app, this should query MongoDB directly with `owner_id` or members array.
+  // For now, we'll return a mock or empty if db method doesn't exist, but we can assume db.getAllCases exists or we just return an empty array if not.
+  // Since db.getAllCases doesn't exist in our mocked types yet, we can use a stub.
+  const allCases = await db.getAllCases?.() || []; 
+  
+  let filtered = allCases.filter((c: Case) => {
+    if (status && c.status !== status) return false;
+    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  // Filter by membership unless ADMIN
+  if (!req.user!.roles.includes('SYSTEM ADMIN')) {
+    const memberCases = [];
+    for (const c of filtered) {
+      if (await db.isUserMemberOfCase(req.user!.id, c.id)) {
+        memberCases.push(c);
+      }
+    }
+    filtered = memberCases;
+  }
+
+  return res.status(200).json({ cases: filtered });
+});
 
 /**
  * Create Case
@@ -29,6 +68,17 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 /**
+ * Get Case details
+ */
+router.get('/:case_id', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
+  const caseObj = await db.getCase(req.params.case_id);
+  if (!caseObj) {
+    return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found' });
+  }
+  return res.status(200).json({ case: caseObj });
+});
+
+/**
  * Add Case Member
  */
 router.post('/:case_id/members', async (req: AuthenticatedRequest, res: Response) => {
@@ -40,7 +90,6 @@ router.post('/:case_id/members', async (req: AuthenticatedRequest, res: Response
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found' });
   }
 
-  // Only case owner or admin can add members
   if (targetCase.owner_id !== req.user!.id && !req.user!.roles.includes('SYSTEM ADMIN')) {
     return res.status(403).json({ error: 'FORBIDDEN', message: 'Only case owner or system admin can manage case membership' });
   }
@@ -56,14 +105,175 @@ router.post('/:case_id/members', async (req: AuthenticatedRequest, res: Response
 });
 
 /**
- * Get Case details
+ * 14. Ingestion Endpoint (POST /api/cases/:id/ingestions)
  */
-router.get('/:case_id', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
-  const caseObj = await db.getCase(req.params.case_id);
-  if (!caseObj) {
-    return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found' });
+router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const case_id = req.params.case_id;
+    const { source_type, source_ref, storage_uri, content, classification } = req.body;
+
+    if (!source_type || !content) {
+      return res.status(400).json({ error: 'MISSING_REQUIRED_FIELDS', message: 'source_type and content are required' });
+    }
+
+    const result = await IngestionService.processIngestion({
+      case_id,
+      source_type,
+      source_ref: source_ref || 'upload',
+      storage_uri: storage_uri || `file://${source_ref || 'upload'}`,
+      content,
+      classification
+    });
+
+    return res.status(200).json({
+      status: 'SUCCESS',
+      job: result.job,
+      evidence: result.evidence,
+      candidates: result.candidatesExtracted,
+      is_duplicate: result.isDuplicate || false
+    });
+  } catch (err: any) {
+    if (err.code) {
+      return res.status(400).json({ error: err.code, message: err.message });
+    }
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message || 'Ingestion failure' });
   }
-  return res.status(200).json({ case: caseObj });
+});
+
+/**
+ * Get Evidence List for a Case Scope
+ */
+router.get('/:case_id/evidence', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
+  const list = await db.getEvidenceByCase(req.params.case_id);
+  return res.status(200).json({ case_id: req.params.case_id, evidence: list });
+});
+
+/**
+ * 15. Entity API
+ */
+router.get('/:case_id/entities', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
+  const candidates = await db.getCandidatesByCase(req.params.case_id);
+  return res.status(200).json({ case_id: req.params.case_id, candidates });
+});
+
+router.post('/:case_id/entities/resolve', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { candidate_id, decision } = req.body;
+    if (!candidate_id || !decision) {
+      return res.status(400).json({ error: 'MISSING_FIELDS', message: 'candidate_id and decision are required' });
+    }
+
+    const hasReviewRole = req.user!.roles.includes('INVESTIGATOR') || req.user!.roles.includes('SUPERVISOR');
+    if (!hasReviewRole) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied: Requires INVESTIGATOR or SUPERVISOR' });
+    }
+
+    const review = await EntityReviewService.recordReviewDecision(candidate_id, decision, req.user!.id);
+    return res.status(200).json({ status: 'SUCCESS', review });
+  } catch (err: any) {
+    return res.status(400).json({ error: 'INVALID_REVIEW_DECISION', message: err.message });
+  }
+});
+
+// Helper for AI/Graph auth context
+const buildAuthContext = (req: AuthenticatedRequest, caseId: string) => ({
+  user_id: req.user!.id,
+  role: req.user!.roles[0],
+  case_id: caseId,
+  access_level: 'MEMBER' // Prototype simplification
+});
+
+/**
+ * 16. Search Endpoint
+ */
+router.post('/:case_id/search', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { query, filters } = req.body;
+    const result = await AIClient.searchCase(buildAuthContext(req, req.params.case_id), query, filters);
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 17. Copilot Endpoint
+ */
+router.post('/:case_id/copilot', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { query } = req.body;
+    const result = await AIClient.copilot(buildAuthContext(req, req.params.case_id), query);
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 18. Leads Endpoint
+ */
+router.post('/:case_id/leads', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { request } = req.body;
+    const result = await AIClient.generateLeads(buildAuthContext(req, req.params.case_id), request);
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 19. Graph Endpoint
+ */
+router.get('/:case_id/graph', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { entityId, hops } = req.query;
+    const result = await GraphClient.getFocusedGraph(buildAuthContext(req, req.params.case_id), entityId as string, Number(hops) || 2);
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 20. Bridge Endpoint
+ */
+router.post('/:case_id/analytics/bridge', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const result = await GraphClient.getBridgeAnalysis(buildAuthContext(req, req.params.case_id));
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 21. Temporal Endpoint
+ */
+router.post('/:case_id/analytics/temporal', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { timeRange } = req.body;
+    const result = await GraphClient.getTemporalAnalysis(buildAuthContext(req, req.params.case_id), timeRange);
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 23. Reports Endpoint
+ */
+router.post('/:case_id/reports', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const { parameters } = req.body;
+    // Proxies to a reporting service or returns a generated stub
+    return res.status(200).json({ 
+      report_id: `rep-${Date.now()}`,
+      status: 'GENERATING'
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

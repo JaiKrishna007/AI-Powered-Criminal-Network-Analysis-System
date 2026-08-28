@@ -41,8 +41,55 @@ export class ControlPlaneDB {
 
   public async connect(): Promise<void> {
     if (this.isTestEnv) return;
+    
+    // 1. Connect and Ping (Task 30)
     await mongoClient.connect();
     this.db = mongoClient.db('netra');
+    await this.db.command({ ping: 1 }); // Ensures availability
+    
+    // 2. Setup Indexes (Task 28)
+    await this.setupIndexes();
+
+    // 3. Seed Roles (Task 29)
+    await this.seedRoles();
+  }
+
+  private async setupIndexes() {
+    if (!this.db) return;
+    const collections = ['users', 'roles', 'cases', 'case_members', 'evidence', 'ingestion_jobs', 'entity_review', 'audit_event_ref'];
+    for (const coll of collections) {
+      // Ensure collections exist to avoid "ns does not exist" errors
+      const collinfo = await this.db.listCollections({ name: coll }).toArray();
+      if (collinfo.length === 0) {
+        await this.db.createCollection(coll);
+      }
+    }
+
+    await this.db.collection('users').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('roles').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('cases').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('evidence').createIndex({ sha256: 1 });
+    await this.db.collection('evidence').createIndex({ case_id: 1, classification: 1 });
+    await this.db.collection('ingestion_jobs').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('entity_review').createIndex({ candidate_id: 1 }, { unique: true });
+    await this.db.collection('audit_event_ref').createIndex({ event_id: 1 }, { unique: true });
+  }
+
+  private async seedRoles() {
+    if (!this.db) return;
+    const defaultRoles = [
+      { id: 'role-investigator', name: 'INVESTIGATOR' },
+      { id: 'role-supervisor', name: 'SUPERVISOR' },
+      { id: 'role-admin', name: 'SYSTEM ADMIN' }
+    ];
+
+    for (const role of defaultRoles) {
+      await this.db.collection('roles').updateOne(
+        { name: role.name },
+        { $setOnInsert: role },
+        { upsert: true }
+      );
+    }
   }
 
   private seedDefaultRolesTest() {
@@ -137,6 +184,17 @@ export class ControlPlaneDB {
     if (!res) return null;
     const { _id, ...caseItem } = res;
     return caseItem as unknown as Case;
+  }
+
+  public async getAllCases(): Promise<Case[]> {
+    if (this.isTestEnv) {
+      return Array.from(this.testCases.values());
+    }
+    const res = await this.getCollection('cases').find({}).toArray();
+    return res.map(row => {
+      const { _id, ...c } = row;
+      return c as unknown as Case;
+    });
   }
 
   public async addCaseMember(member: CaseMember): Promise<CaseMember> {
@@ -281,18 +339,18 @@ export class ControlPlaneDB {
     return review;
   }
 
-  public async getEntityReview(candidate_id: string): Promise<EntityReview | null> {
+  public async getEntityReview(candidateId: string): Promise<EntityReview | null> {
     if (this.isTestEnv) {
-      return this.testEntityReviews.get(candidate_id) || null;
+      return this.testEntityReviews.get(candidateId) || null;
     }
-    const res = await this.getCollection('entity_review').findOne({ candidate_id });
+    const res = await this.getCollection('entity_review').findOne({ candidate_id: candidateId });
     if (!res) return null;
     const { _id, ...rev } = res;
     return rev as unknown as EntityReview;
   }
 
   // --- 7. Audit Event Reference ---
-  public async logAuditEvent(event: AuditEventRef): Promise<AuditEventRef> {
+  public async createAuditEvent(event: AuditEventRef): Promise<AuditEventRef> {
     if (this.isTestEnv) {
       this.testAuditEvents.set(event.event_id, event);
       return event;
