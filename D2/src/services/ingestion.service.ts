@@ -280,12 +280,10 @@ export class IngestionService {
             const accessLevel = member?.access_level || (payload.userContext.role.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');
             const effectiveRole = getEffectiveRole([payload.userContext.role]);
             const authCtx = payload.userContext;
-            const { GraphClient } = await import('./graph_client.js');
-            await GraphClient.fetchD4('/relationships/batch', authCtx, {
-              case_id: payload.case_id,
-              evidence_id: evidenceId,
-              relationships: validatedRelationships
-            }, 5000);
+            const { GraphSyncAdapter } = await import('../workers/graph_sync.adapter.js');
+            for (const rel of validatedRelationships) {
+              await GraphSyncAdapter.syncRelationshipToD4(authCtx, rel);
+            }
             graphSyncStatus = 'SYNCED';
           } catch (err: any) {
             console.warn(`Failed to publish extracted relationships to D4: ${err.message}`);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import app from '../../src/app';
 import { db } from '../../src/db';
@@ -12,7 +12,31 @@ import fs from 'fs/promises';
 import path from 'path';
 import { EVIDENCE_DIR, REPORTS_DIR } from '../../src/config/paths';
 
+import { spawn, ChildProcess } from 'child_process';
+
 describe('Comprehensive End-to-End Full Pipeline (Issue 37)', () => {
+  let d4Process: ChildProcess;
+  const d4Port = 8003;
+
+  beforeAll(async () => {
+    const d4Dir = path.resolve(__dirname, '../../../D4/System graph intelligence security');
+    const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    d4Process = spawn(npxCmd, ['tsx', 'server.ts'], { 
+      cwd: d4Dir, 
+      env: { ...process.env, PORT: d4Port.toString(), GRAPH_BACKEND: 'memory' }, 
+      shell: true 
+    });
+    
+    // Wait for server to start
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }, 10000);
+
+  afterAll(() => {
+    if (d4Process) {
+      d4Process.kill();
+    }
+  });
+
   beforeEach(async () => {
     await db.resetDb();
     EntityResolutionService.resetMLClient();
@@ -107,17 +131,8 @@ describe('Comprehensive End-to-End Full Pipeline (Issue 37)', () => {
     expect(reviewRes.status).toBe(200);
     expect(reviewRes.body.review.decision).toBe('ACCEPTED');
 
-    // 6. D4 Graph Batch Sync & Entity Synchronization
-    let capturedD4Sync: any = null;
-    vi.spyOn(GraphClient, 'fetchD4').mockImplementation(async (endpoint, _authCtx, payload) => {
-      capturedD4Sync = { endpoint, payload };
-      if (endpoint === '/relationships/batch') return { status: 'SUCCESS', synced_count: 5 };
-      if (endpoint === '/internal/entities/resolve') return { status: 'SUCCESS', entity_id: 'ENT-CANONICAL-1' };
-      if (endpoint === '/graph/focused') return { nodes: [{ id: 'ENT-1', label: 'Dev Anand', type: 'PERSON' }], edges: [] };
-      if (endpoint === '/analytics/temporal') return { clusters: [], cadence: 'REGULAR', timeline: [] };
-      if (endpoint === '/analytics/bridge') return { bridges: [] };
-      return { status: 'SUCCESS' };
-    });
+    // 6. D4 Graph Batch Sync & Entity Synchronization (Executed naturally in background)
+    // A real D4 server is running in memory for this test.
 
     // 7. D3 Semantic Search & AI Coordination
     const aiSearchSpy = vi.spyOn(AIClient, 'searchCase').mockResolvedValueOnce({

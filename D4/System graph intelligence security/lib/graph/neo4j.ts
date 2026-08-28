@@ -107,7 +107,7 @@ export class Neo4jGraphRepository implements GraphRepository {
       const updateProps = { ...entity.properties };
       if (entity.event_time) updateProps.event_time = entity.event_time;
       
-      const updateQuery = `MATCH (n:\`${label}\` {id: $id, case_id: $caseId}) SET n += $updateProps`;
+      const updateQuery = `MATCH (n {id: $id, case_id: $caseId}) REMOVE n:UNKNOWN SET n:\`${label}\`, n += $updateProps`;
       await this.executeCypher(updateQuery, { id: entity.id, caseId: entity.case_id, updateProps });
     } else {
       const label = entity.type;
@@ -138,8 +138,14 @@ export class Neo4jGraphRepository implements GraphRepository {
     };
 
     const query = `
-      MATCH (source {id: $sourceId, case_id: $caseId})
-      MATCH (target {id: $targetId, case_id: $caseId})
+      MERGE (source {id: $sourceId})
+      ON CREATE SET source:UNKNOWN, source.case_id = $caseId, source.name = 'Placeholder', source.type = 'UNKNOWN'
+      WITH source
+      MATCH (source) WHERE source.case_id = $caseId
+      MERGE (target {id: $targetId})
+      ON CREATE SET target:UNKNOWN, target.case_id = $caseId, target.name = 'Placeholder', target.type = 'UNKNOWN'
+      WITH source, target
+      MATCH (target) WHERE target.case_id = $caseId
       MERGE (source)-[r:\`${rel.type}\` {id: $props.id}]->(target)
       SET r += $props
       RETURN r;

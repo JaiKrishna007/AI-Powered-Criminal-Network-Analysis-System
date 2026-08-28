@@ -60,9 +60,11 @@ describe('Ingestion, Extraction & Graph Sync Hardening (Issues 21 - 30)', () => 
   });
 
   it('Issues 26, 27, 28: Validates relationships, maps candidate IDs, and attaches evidence IDs', async () => {
-    let capturedPayload: any = null;
-    vi.spyOn(GraphClient, 'fetchD4').mockImplementation(async (_ep, _ctx, payload) => {
-      capturedPayload = payload;
+    let capturedPayloads: any[] = [];
+    vi.spyOn(GraphClient, 'fetchD4').mockImplementation(async (ep, _ctx, payload) => {
+      if (ep === '/sync/relationship') {
+        capturedPayloads.push(payload);
+      }
       return { status: 'SUCCESS' };
     });
 
@@ -78,12 +80,11 @@ describe('Ingestion, Extraction & Graph Sync Hardening (Issues 21 - 30)', () => 
 
     expect(result.job.state).toBe('COMPLETED');
     expect(result.job.graph_sync).toBe('SYNCED');
-    expect(capturedPayload).toBeDefined();
-    expect(capturedPayload.relationships.length).toBeGreaterThan(0);
+    expect(capturedPayloads.length).toBeGreaterThan(0);
 
-    const rel = capturedPayload.relationships[0];
+    const rel = capturedPayloads[0];
     expect(rel.id).toMatch(/^REL-/);
-    expect(rel.source_id).toMatch(/^CAND-/);
+    expect(rel.source).toMatch(/^CAND-/);
     expect(rel.evidence_ids).toContain(result.evidence?.id);
     expect(rel.properties.provenance.evidence_id).toBe(result.evidence?.id);
   });

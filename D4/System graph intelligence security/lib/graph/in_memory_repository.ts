@@ -86,20 +86,32 @@ export class InMemoryGraphRepository implements GraphRepository {
       throw new Error(`Unauthorized access to case_id: ${rel.case_id}`);
     }
 
-    const sourceNode = this.nodes.get(rel.source);
-    const targetNode = this.nodes.get(rel.target);
+    let sourceNode = this.nodes.get(rel.source);
+    if (!sourceNode) {
+      sourceNode = {
+        id: rel.source,
+        type: 'UNKNOWN',
+        case_id: rel.case_id,
+        name: 'Placeholder',
+        properties: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      this.nodes.set(rel.source, sourceNode);
+    }
 
-    if (!sourceNode || !targetNode) {
-      await this.auditLogger.log(
-        auth.actor_id,
-        "ADD_RELATIONSHIP",
-        "GRAPH",
-        rel.id,
-        "DENIED",
-        auth.correlation_id,
-        { reason: "Nodes do not exist", source: rel.source, target: rel.target }
-      );
-      throw new Error(`Cannot add relationship: Source or target node does not exist.`);
+    let targetNode = this.nodes.get(rel.target);
+    if (!targetNode) {
+      targetNode = {
+        id: rel.target,
+        type: 'UNKNOWN',
+        case_id: rel.case_id,
+        name: 'Placeholder',
+        properties: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      this.nodes.set(rel.target, targetNode);
     }
 
     if (sourceNode.case_id !== rel.case_id || targetNode.case_id !== rel.case_id) {

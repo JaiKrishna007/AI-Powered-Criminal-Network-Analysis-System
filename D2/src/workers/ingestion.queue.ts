@@ -182,19 +182,7 @@ export const startIngestionWorker = () => {
             };
             const { GraphSyncAdapter } = await import('./graph_sync.adapter.js');
             
-            // Sync candidate entities first (Issue 2)
-            for (const candidate of candidatesExtracted) {
-              const entityData = {
-                id: candidate.id,
-                type: candidate.candidate_data?.type || 'UNKNOWN',
-                name: candidate.name,
-                identifiers: candidate.identifiers,
-                properties: candidate.candidate_data?.properties || {},
-                created_at: candidate.created_at,
-                updated_at: candidate.created_at
-              };
-              await GraphSyncAdapter.syncEntityToD4(authCtx, entityData as any);
-            }
+            // Only sync relationships (Issue 1 & 2 fixes)
 
             for (const rel of validatedRelationships) {
               await GraphSyncAdapter.syncRelationshipToD4(authCtx, rel);
