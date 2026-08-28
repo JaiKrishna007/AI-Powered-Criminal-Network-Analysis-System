@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:3000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_DB=netra
+      - REDIS_URL=redis://redis:6379
+      - ML_SERVICE_URL=http://ml_service:8001
+      - D3_SERVICE_URL=http://d3_service:8002
+      - D4_SERVICE_URL=http://d4_service:8003
+      - SESSION_SECRET=${SESSION_SECRET}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET}
+      - EVIDENCE_STORAGE_PATH=/data/evidence/
+      - REPORTS_STORAGE_PATH=/data/reports/
+    volumes:
+      - evidence_data:/data/evidence/
+      - reports_data:/data/reports/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - netra
+
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "127.0.0.1:27017:27017" # Bound to localhost for developer debugging only
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - netra
+
+  redis:
+    image: redis:7
+    ports:
+      - "127.0.0.1:6379:6379" # Bound to localhost for developer debugging only
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - netra
+
+  neo4j:
+    image: neo4j:5.9
+    ports:
+      - "127.0.0.1:7474:7474" # Bound to localhost for developer debugging only
+      - "127.0.0.1:7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-password}
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - netra
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "127.0.0.1:6333:6333" # Bound to localhost for developer debugging only
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:6333/readyz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - netra
+
+  # =========================================================================
+  # MICROSERVICE CONTRACT MOCKS (DEMO ONLY / CONTRACT VERIFICATION)
+  # Replace these containers with the real D3/D4/ML repository containers 
+  # on the 'netra' Docker network for the full end-to-end production deployment.
+  # Note: Ports are NOT exposed to the host for security; communication 
+  # occurs strictly across the internal 'netra' bridge network.
+  # =========================================================================
+
+  ml_service:
+    build: .
+    command: ["npm", "run", "mock:ml"]
+    expose:
+      - "8001"
+    environment:
+      - PORT=8001
+      - SERVICE_TYPE=ml
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET}
+    networks:
+      - netra
+
+  d3_service:
+    build: .
+    command: ["npm", "run", "mock:d3"]
+    expose:
+      - "8002"
+    environment:
+      - PORT=8002
+      - SERVICE_TYPE=d3
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - netra
+
+  d4_service:
+    build: .
+    command: ["npm", "run", "mock:d4"]
+    expose:
+      - "8003"
+    environment:
+      - PORT=8003
+      - SERVICE_TYPE=d4
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    networks:
+      - netra
+
+volumes:
+  evidence_data:
+  reports_data:
+  mongodb_data:
+  neo4j_data:
+  qdrant_data:
+
+networks:
+  netra:
+    name: netra
+    driver: bridge

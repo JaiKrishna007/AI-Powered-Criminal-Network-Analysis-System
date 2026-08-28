@@ -1,0 +1,50 @@
+{
+  "name": "netra_rag",
+  "version": "1.0.0",
+  "description": "AI-Powered Criminal Network Analysis System",
+  "main": "dist/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.backend.json",
+    "start": "node dist/server.js",
+    "dev": "ts-node -P tsconfig.backend.json src/server.ts",
+    "mock:ml": "node dist/mock_services/server.js ml",
+    "mock:d3": "node dist/mock_services/server.js d3",
+    "mock:d4": "node dist/mock_services/server.js d4",
+    "mock:all": "node dist/mock_services/server.js all",
+    "seed:demo": "ts-node -P tsconfig.backend.json src/scripts/seed_demo.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bullmq": "^6.3.1",
+    "connect-redis": "^10.0.0",
+    "cors": "^2.8.5",
+    "csv-parse": "^7.0.2",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.6.2",
+    "express-session": "^1.19.0",
+    "ioredis": "^6.0.0",
+    "mongodb": "^7.6.0",
+    "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.20.1",
+    "uuid": "^14.0.2",
+    "zod": "^4.4.3",
+    "shared-contracts": "*"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/express-session": "^1.19.0",
+    "@types/node": "^26.4.0",
+    "@types/pdfkit": "^0.17.6",
+    "@types/supertest": "^6.0.2",
+    "@types/uuid": "^10.0.0",
+    "supertest": "^7.0.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
