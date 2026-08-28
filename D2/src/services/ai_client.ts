@@ -26,9 +26,7 @@ export class AIClient {
         case_id: context.case_id,
         allowed_case_ids: context.allowed_case_ids || [context.case_id],
         access_level: context.access_level,
-        correlation_id: context.correlation_id || '',
-        issued_at: Date.now(),
-        expires_at: Date.now() + 60000
+        correlation_id: context.correlation_id || ''
       });
 
       const headers: Record<string, string> = {

@@ -28,7 +28,10 @@ const worker = new Worker('ingestion', async (job: Job) => {
     throw new Error('Unauthorized: Missing explicit hmac_protocol in BullMQ job.');
   }
 
-  if (hmac_protocol.expires_at && Date.now() > hmac_protocol.expires_at) {
+  if (!hmac_protocol.expires_at) {
+    throw new Error('Forbidden: Missing expires_at in BullMQ job.');
+  }
+  if (Date.now() > hmac_protocol.expires_at) {
     throw new Error('Forbidden: AuthContext payload expired in BullMQ job.');
   }
 

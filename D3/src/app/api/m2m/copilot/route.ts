@@ -43,9 +43,14 @@ export async function POST(request: Request) {
       if (isGraph) {
         try {
           const subgraph = await GraphContextClient.getFocusedGraph(authHeader, signature, focusEntityId, 1);
-          graphContextParts.push("Graph Context: " + JSON.stringify(subgraph));
+          if (!subgraph || Object.keys(subgraph).length === 0) {
+            graphContextParts.push("Graph Context: NO_GRAPH_RESULTS");
+          } else {
+            graphContextParts.push("Graph Context: " + JSON.stringify(subgraph));
+          }
         } catch (e: any) {
-          console.warn("Failed to retrieve graph context from D4:", e.message);
+          console.error("Failed to retrieve graph context from D4:", e.message);
+          return NextResponse.json({ error: 'GRAPH_SERVICE_UNAVAILABLE', details: e.message }, { status: 503 });
         }
       }
       
@@ -53,9 +58,14 @@ export async function POST(request: Request) {
         try {
           // Actual D4 temporal client operation (Issue #7)
           const temporalGraph = await GraphContextClient.getTemporalGraph(authHeader, signature, query, focusEntityId);
-          graphContextParts.push("Temporal Context: " + JSON.stringify(temporalGraph));
+          if (!temporalGraph || Object.keys(temporalGraph).length === 0) {
+            graphContextParts.push("Temporal Context: NO_GRAPH_RESULTS");
+          } else {
+            graphContextParts.push("Temporal Context: " + JSON.stringify(temporalGraph));
+          }
         } catch (e: any) {
-          console.warn("Failed to retrieve temporal context from D4:", e.message);
+          console.error("Failed to retrieve temporal context from D4:", e.message);
+          return NextResponse.json({ error: 'GRAPH_SERVICE_UNAVAILABLE', details: e.message }, { status: 503 });
         }
       }
     } else if (isGraph || isTemporal) {
@@ -65,29 +75,17 @@ export async function POST(request: Request) {
     const graphContext = graphContextParts.length > 0 ? graphContextParts.join('\n\n') : "Pure semantic query. Graph routing bypassed.";
 
     // 3. Vector Retrieval (Qdrant)
-    let evidenceContext = "No relevant text chunks retrieved.";
+    let evidenceContext = "NO_RESULTS";
     const grounding: string[] = [];
     try {
-      const qdrant = getQdrantClient();
-      // Target correct embedding model
+      const { searchEvidence } = require('@/lib/db/qdrant');
       const queryEmbedding = await generateEmbedding(query, 'multilingual-e5-small');
       
-      const searchResults = await qdrant.search('evidence', {
-        vector: queryEmbedding,
-        limit: 5,
-        filter: {
-          must: [
-            {
-              key: 'case_id',
-              match: { any: authContext.allowed_case_ids || [authContext.case_id] } // Issue #6: use allowed_case_ids
-            }
-          ]
-        },
-        with_payload: true,
-      });
+      const allowedCaseIds = authContext.allowed_case_ids || [authContext.case_id];
+      const searchResults = await searchEvidence('evidence', queryEmbedding, allowedCaseIds, 5);
 
-      if (searchResults.length > 0) {
-        evidenceContext = searchResults.map(res => {
+      if (searchResults && searchResults.length > 0) {
+        evidenceContext = searchResults.map((res: any) => {
           const p = res.payload as any;
           if (p.source_ref && !grounding.includes(p.source_ref)) {
             grounding.push(p.source_ref); // Preserve EVD-xxx provenance
@@ -95,8 +93,9 @@ export async function POST(request: Request) {
           return `[Source: ${p.source_ref}, Chunk: ${p.chunk_ref}]\n${p.text}`;
         }).join('\n\n');
       }
-    } catch (e) {
-      console.warn("Qdrant retrieval failed or collection missing:", e);
+    } catch (e: any) {
+      console.error("Qdrant retrieval failed:", e.message);
+      return NextResponse.json({ error: 'VECTOR_STORE_UNAVAILABLE', details: e.message }, { status: 503 });
     }
 
     // 4. Generate AI Response

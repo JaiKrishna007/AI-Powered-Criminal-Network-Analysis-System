@@ -39,7 +39,7 @@ export async function generateCopilotResponse(messages: OllamaMessage[], options
   }
 }
 
-export async function generateEmbedding(text: string, model: string = 'nomic-embed-text'): Promise<number[]> {
+export async function generateEmbedding(text: string, model: string = 'multilingual-e5-small'): Promise<number[]> {
   try {
     const response = await fetch(`${OLLAMA_URL}/api/embeddings`, {
       method: 'POST',

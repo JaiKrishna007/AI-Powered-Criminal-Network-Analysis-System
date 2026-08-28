@@ -25,11 +25,23 @@ export async function initQdrantCollection(collectionName: string) {
   }
 }
 
-export async function searchEvidence(collectionName: string, queryVector: number[], limit: number = 5) {
+export async function searchEvidence(collectionName: string, queryVector: number[], allowedCaseIds: string[], limit: number = 5) {
+  if (!allowedCaseIds || allowedCaseIds.length === 0) {
+    throw new Error('UNAUTHORIZED: Case filtering is mandatory for evidence retrieval.');
+  }
+  
   const client = getQdrantClient();
   const results = await client.search(collectionName, {
     vector: queryVector,
     limit,
+    filter: {
+      must: [
+        {
+          key: 'case_id',
+          match: { any: allowedCaseIds }
+        }
+      ]
+    },
     with_payload: true,
   });
   return results;
