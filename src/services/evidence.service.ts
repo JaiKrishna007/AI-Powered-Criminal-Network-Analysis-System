@@ -2,8 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { db } from '../db';
-
-const EVIDENCE_DIR = path.resolve(__dirname, '../../data/evidence');
+import { EVIDENCE_DIR } from '../config/paths';
 
 if (!fs.existsSync(EVIDENCE_DIR)) {
   fs.mkdirSync(EVIDENCE_DIR, { recursive: true });

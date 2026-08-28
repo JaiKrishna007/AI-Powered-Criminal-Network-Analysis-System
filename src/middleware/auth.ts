@@ -124,10 +124,25 @@ export class AuthMiddleware {
       throw ServiceErrors.CASE_ACCESS_DENIED();
     }
 
-    if (classification) {
-      // In a real implementation, you'd check if the user's clearance >= required classification
-      // For this prototype, if they are a member and we passed the above, we allow it.
-      // E.g., SUPERVISOR > INVESTIGATOR logic
+    const targetCase = await db.getCase(caseId);
+    if (!targetCase) {
+      throw new Error('CASE_NOT_FOUND');
+    }
+
+    const clearanceMap: Record<string, number> = {
+      'UNCLASSIFIED': 0,
+      'CONFIDENTIAL': 1,
+      'RESTRICTED': 2,
+      'SECRET': 3,
+      'TOP_SECRET': 4
+    };
+
+    const user = await db.getUser(userId);
+    const userClearance = user?.clearance_level ?? 0;
+    const requiredClearance = clearanceMap[targetCase.classification] ?? 0;
+
+    if (userClearance < requiredClearance) {
+      throw ServiceErrors.CASE_ACCESS_DENIED();
     }
   }
 }

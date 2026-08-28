@@ -12,7 +12,7 @@ describe('TC29 / TC30: Evidence Tamper Tests', () => {
     await db.resetDb();
     
     // Seed test users
-    await db.createUser({ id: 'USR-TAMPER', display_name: 'Investigator Alice', status: 'ACTIVE' });
+    await db.createUser({ id: 'USR-TAMPER', display_name: 'Investigator Alice', status: 'ACTIVE', clearance_level: 2, password_hash: '' });
     await db.assignUserRole('USR-TAMPER', 'INVESTIGATOR');
     
     await db.createCase({
@@ -47,7 +47,8 @@ describe('TC29 / TC30: Evidence Tamper Tests', () => {
 
     // 2. Validate original stored file matches hash
     const fileName = evidence.storage_uri.replace('local://', '');
-    const filePath = path.resolve(__dirname, '../../data/evidence', fileName);
+    const { EVIDENCE_DIR } = await import('../../src/config/paths');
+    const filePath = path.resolve(EVIDENCE_DIR, fileName);
     const fileContent = await fs.readFile(filePath);
     const verifiedHash = crypto.createHash('sha256').update(fileContent).digest('hex');
     expect(verifiedHash).toBe(evidence.sha256);

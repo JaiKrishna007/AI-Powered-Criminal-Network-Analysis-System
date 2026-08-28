@@ -75,12 +75,27 @@ export const IngestJobSchema = z.object({
 
 export type IngestJobV1 = z.infer<typeof IngestJobSchema>;
 
+// --- 6. REPORT.v1 ---
+export const ReportIdSchema = z.string().regex(/^REP-.*$/);
+export const ReportSchema = z.object({
+  id: ReportIdSchema,
+  case_id: CaseIdSchema,
+  created_by: UserIdSchema,
+  status: z.enum(['GENERATING', 'COMPLETED', 'FAILED']),
+  storage_uri: z.string().optional(),
+  created_at: TimestampSchema
+});
+
+export type ReportV1 = z.infer<typeof ReportSchema>;
+
 // Internal Application Schemas (D2 control plane objects not explicitly in external frozen contract)
 
 export const UserSchema = z.object({
   id: UserIdSchema,
   display_name: z.string(),
-  status: z.string()
+  status: z.string(),
+  clearance_level: z.number().int().min(0).max(4).optional(),
+  password_hash: z.string().optional()
 });
 
 export const CaseSchema = z.object({

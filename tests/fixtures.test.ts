@@ -71,16 +71,16 @@ describe('PS26189-CONTRACT-v1 Developer 2 Test Fixtures (BE-T01 - BE-T07) & Regr
     ExtractionService.registerWorker(testExtractionWorker);
 
     // Seed test users
-    await db.createUser({ id: 'user-investigator', display_name: 'Investigator Alice', status: 'ACTIVE' });
+    await db.createUser({ id: 'user-investigator', display_name: 'Investigator Alice', status: 'ACTIVE', clearance_level: 2, password_hash: '' });
     await db.assignUserRole('user-investigator', 'INVESTIGATOR');
 
-    await db.createUser({ id: 'user-supervisor', display_name: 'Supervisor Bob', status: 'ACTIVE' });
+    await db.createUser({ id: 'user-supervisor', display_name: 'Supervisor Bob', status: 'ACTIVE', clearance_level: 3, password_hash: '' });
     await db.assignUserRole('user-supervisor', 'SUPERVISOR');
 
-    await db.createUser({ id: 'user-admin', display_name: 'Admin Charlie', status: 'ACTIVE' });
+    await db.createUser({ id: 'user-admin', display_name: 'Admin Charlie', status: 'ACTIVE', clearance_level: 4, password_hash: '' });
     await db.assignUserRole('user-admin', 'SYSTEM ADMIN');
 
-    await db.createUser({ id: 'user-unauthorized', display_name: 'Outside Dave', status: 'ACTIVE' });
+    await db.createUser({ id: 'user-unauthorized', display_name: 'Outside Dave', status: 'ACTIVE', clearance_level: 1, password_hash: '' });
     await db.assignUserRole('user-unauthorized', 'INVESTIGATOR');
 
     // Seed test case

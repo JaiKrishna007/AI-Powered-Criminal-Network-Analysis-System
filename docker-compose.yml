@@ -4,7 +4,7 @@ services:
   backend:
     build: .
     ports:
-      - "8000:8000"
+      - "8000:3000"
     environment:
       - MONGODB_URI=mongodb://mongodb:27017
       - MONGODB_DB=netra
@@ -25,6 +25,8 @@ services:
       - neo4j
       - qdrant
       - redis
+    networks:
+      - netra
 
   mongodb:
     image: mongo:6.0
@@ -32,6 +34,8 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    networks:
+      - netra
 
   neo4j:
     image: neo4j:5.9
@@ -42,6 +46,8 @@ services:
       - NEO4J_AUTH=neo4j/password
     volumes:
       - neo4j_data:/data
+    networks:
+      - netra
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -49,14 +55,23 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    networks:
+      - netra
 
   redis:
     image: redis:7
     ports:
       - "6379:6379"
+    networks:
+      - netra
 
 volumes:
   evidence_data:
   mongodb_data:
   neo4j_data:
   qdrant_data:
+
+networks:
+  netra:
+    name: netra
+    driver: bridge

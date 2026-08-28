@@ -7,11 +7,10 @@ import { EvidenceService } from '../services/evidence.service';
 import { EntityCandidate } from '../models/types';
 import fs from 'fs';
 import path from 'path';
+import { EVIDENCE_DIR } from '../config/paths';
 
-const connection = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379')
-};
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const connection = new (require('ioredis'))(redisUrl, { maxRetriesPerRequest: null });
 
 export const ingestionQueue = new Queue('ingestionQueue', { connection });
 
@@ -25,7 +24,7 @@ export const startIngestionWorker = () => {
 
     try {
       const fileName = storageUri.replace('local://', '');
-      const filePath = path.resolve(__dirname, '../../../data/evidence', fileName);
+      const filePath = path.resolve(EVIDENCE_DIR, fileName);
       const contentBuffer = await fs.promises.readFile(filePath);
 
       // Extract

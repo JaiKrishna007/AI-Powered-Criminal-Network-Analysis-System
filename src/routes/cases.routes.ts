@@ -271,10 +271,11 @@ router.post('/:case_id/analytics/temporal', AuthMiddleware.requireCaseAccess, as
 router.post('/:case_id/reports', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { parameters } = req.body;
-    // Proxies to a reporting service or returns a generated stub
-    return res.status(200).json({ 
-      report_id: `rep-${Date.now()}`,
-      status: 'GENERATING'
+    const { ReportService } = await import('../services/report.service');
+    const report = await ReportService.generateCaseReport(req.params.case_id, req.user!.id, parameters || {});
+    return res.status(202).json({ 
+      report_id: report.id,
+      status: report.status
     });
   } catch (err) {
     next(err);

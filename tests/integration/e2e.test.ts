@@ -24,7 +24,7 @@ describe('E2E Case 1042 Simulation', () => {
     ExtractionService.registerWorker(e2eWorker);
 
     // Seed test user and case
-    await db.createUser({ id: 'USR-E2E', display_name: 'E2E Investigator', status: 'ACTIVE' });
+    await db.createUser({ id: 'USR-E2E', display_name: 'E2E Investigator', status: 'ACTIVE', clearance_level: 2, password_hash: '' });
     await db.assignUserRole('USR-E2E', 'INVESTIGATOR');
     
     await db.createCase({
@@ -78,7 +78,8 @@ describe('E2E Case 1042 Simulation', () => {
     try {
       const evidence = ingestRes.body.evidence;
       const fileName = evidence.storage_uri.replace('local://', '');
-      const filePath = require('path').resolve(__dirname, '../../data/evidence', fileName);
+      const { EVIDENCE_DIR } = await import('../../src/config/paths');
+      const filePath = require('path').resolve(EVIDENCE_DIR, fileName);
       await fs.unlink(filePath);
     } catch(e) {}
   });

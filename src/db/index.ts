@@ -31,6 +31,7 @@ export class ControlPlaneDB {
   private testEntityReviews: Map<string, EntityReview> = new Map();
   private testAuditEvents: Map<string, AuditEventRef> = new Map();
   private testCandidates: Map<string, EntityCandidate> = new Map();
+  private testReports: Map<string, any> = new Map();
 
   constructor() {
     this.isTestEnv = process.env.NODE_ENV === 'test';
@@ -52,6 +53,9 @@ export class ControlPlaneDB {
 
     // 3. Seed Roles (Task 29)
     await this.seedRoles();
+
+    // 4. Seed Users (Issues 9-10)
+    await this.seedUsers();
   }
 
   private async setupIndexes() {
@@ -92,6 +96,28 @@ export class ControlPlaneDB {
     }
   }
 
+  private async seedUsers() {
+    if (!this.db) return;
+    const bcrypt = require('bcrypt');
+    const defaultPassword = process.env.DEMO_PASSWORD || 'password123';
+    const hash = await bcrypt.hash(defaultPassword, 10);
+
+    const demoUsers = [
+      { id: 'USR-INV-001', display_name: 'investigator1', status: 'ACTIVE', clearance_level: 2, role: 'INVESTIGATOR' },
+      { id: 'USR-SUP-001', display_name: 'supervisor1', status: 'ACTIVE', clearance_level: 3, role: 'SUPERVISOR' },
+      { id: 'USR-ADM-001', display_name: 'admin1', status: 'ACTIVE', clearance_level: 4, role: 'SYSTEM ADMIN' }
+    ];
+
+    for (const user of demoUsers) {
+      const { role, ...userData } = user;
+      const existingUser = await this.getUser(user.id);
+      if (!existingUser) {
+        await this.createUser({ ...userData, password_hash: hash });
+        await this.assignUserRole(user.id, role);
+      }
+    }
+  }
+
   private seedDefaultRolesTest() {
     this.testRoles.set('INVESTIGATOR', { id: 'role-investigator', name: 'INVESTIGATOR' });
     this.testRoles.set('SUPERVISOR', { id: 'role-supervisor', name: 'SUPERVISOR' });
@@ -123,6 +149,17 @@ export class ControlPlaneDB {
     if (!res) return null;
     const { _id, ...user } = res;
     return user as unknown as User;
+  }
+
+  public async getAllUsers(): Promise<User[]> {
+    if (this.isTestEnv) {
+      return Array.from(this.testUsers.values());
+    }
+    const res = await this.getCollection('users').find({}).toArray();
+    return res.map(row => {
+      const { _id, ...user } = row;
+      return user as unknown as User;
+    });
   }
 
   // --- 2. Roles & UserRoles ---
@@ -443,6 +480,27 @@ export class ControlPlaneDB {
     });
   }
 
+  // --- Reports ---
+  public async createReport(report: any): Promise<any> {
+    if (this.isTestEnv) {
+      if (!this.testReports) this.testReports = new Map();
+      this.testReports.set(report.id, report);
+      return report;
+    }
+    await this.getCollection('reports').insertOne({ ...report });
+    return report;
+  }
+
+  public async getReport(id: string): Promise<any> {
+    if (this.isTestEnv) {
+      return this.testReports?.get(id) || null;
+    }
+    const res = await this.getCollection('reports').findOne({ id });
+    if (!res) return null;
+    const { _id, ...rep } = res;
+    return rep;
+  }
+
   public async resetDb(): Promise<void> {
     this.testUsers.clear();
     this.testUserRoles = [];
@@ -453,6 +511,7 @@ export class ControlPlaneDB {
     this.testEntityReviews.clear();
     this.testAuditEvents.clear();
     this.testCandidates.clear();
+    if (this.testReports) this.testReports.clear();
     this.seedDefaultRolesTest();
   }
 }

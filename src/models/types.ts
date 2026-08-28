@@ -14,7 +14,8 @@ import {
   AuditEventRefV1,
   EntityV1,
   RelationshipV1,
-  InsightV1
+  InsightV1,
+  ReportSchema
 } from '../contracts';
 
 export type User = z.infer<typeof UserSchema>;
@@ -22,6 +23,7 @@ export type Case = z.infer<typeof CaseSchema>;
 export type Evidence = z.infer<typeof EvidenceSchema>;
 export type IngestionJob = z.infer<typeof IngestJobSchema>;
 export type AuditEventRef = z.infer<typeof AuditEventRefSchema>;
+export type Report = z.infer<typeof ReportSchema>;
 
 export type IngestionJobState = IngestionJob['state'];
 export type ReviewState = 'CANDIDATE' | 'ACCEPTED' | 'REJECTED' | 'DEFERRED';

@@ -5,18 +5,7 @@ import { AuditMiddleware } from '../middleware/audit';
 
 const router = Router();
 
-// Mock credentials for prototype testing
-const DEMO_USERS: Record<string, string> = {
-  'investigator1': 'password123',
-  'supervisor1': 'password123',
-  'admin1': 'password123'
-};
-
-const USER_MAPPING: Record<string, string> = {
-  'investigator1': 'USR-INV-001', // Should match seeded DB user
-  'supervisor1': 'USR-SUP-001',
-  'admin1': 'USR-ADM-001'
-};
+import bcrypt from 'bcrypt';
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -25,31 +14,26 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'BAD_REQUEST', message: 'Username and password are required.' });
   }
 
-  // 1. Verify demo credentials
-  if (DEMO_USERS[username] !== password) {
+  // Find user by display_name
+  const users = await db.getAllUsers();
+  const user = users.find(u => u.display_name === username);
+
+  if (!user || !user.password_hash) {
     return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid credentials.' });
   }
 
-  // 2. Map to internal User ID
-  const userId = USER_MAPPING[username] || username;
-
-  // 3. Load user from MongoDB
-  const user = await db.getUser(userId);
-  if (!user) {
-    // If not found in DB but valid demo user, create them (mock behavior for prototype)
-    await db.createUser({ id: userId, display_name: username, status: 'ACTIVE' });
-    if (username.includes('admin')) await db.assignUserRole(userId, 'SYSTEM ADMIN');
-    else if (username.includes('super')) await db.assignUserRole(userId, 'SUPERVISOR');
-    else await db.assignUserRole(userId, 'INVESTIGATOR');
+  const isValid = await bcrypt.compare(password, user.password_hash);
+  if (!isValid) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid credentials.' });
   }
 
-  // 4. Create signed session
-  (req.session as any).userId = userId;
+  // Create signed session
+  (req.session as any).userId = user.id;
 
-  // 5. Audit Login
-  await AuditMiddleware.logAction(userId, 'LOGIN');
+  // Audit Login
+  await AuditMiddleware.logAction(user.id, 'LOGIN');
 
-  return res.json({ message: 'Login successful', userId });
+  return res.json({ message: 'Login successful', userId: user.id });
 });
 
 router.post('/logout', async (req, res) => {

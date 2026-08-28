@@ -1,7 +1,10 @@
 import { Router, Response } from 'express';
 import { AuthMiddleware, AuthenticatedRequest } from '../middleware/auth';
 import { db } from '../db';
-// Assuming we have a report client or similar, for now we will stub it
+import { ReportService } from '../services/report.service';
+import fs from 'fs';
+import path from 'path';
+import { REPORTS_DIR } from '../config/paths';
 
 const router = Router();
 router.use(AuthMiddleware.authenticate);
@@ -11,11 +14,23 @@ router.use(AuthMiddleware.authenticate);
  * GET /api/reports/:id
  */
 router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
-  // Mock fetching report metadata
+  const report = await db.getReport(req.params.id);
+  if (!report) {
+    return res.status(404).json({ error: 'NOT_FOUND', message: 'Report not found' });
+  }
+
+  try {
+    await AuthMiddleware.authorizeCaseAccess({ userId: req.user!.id, caseId: report.case_id });
+  } catch (e) {
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'Not authorized to view reports for this case' });
+  }
+
   return res.status(200).json({ 
-    id: req.params.id, 
-    status: 'COMPLETED',
-    metadata: { generated_by: req.user!.id }
+    id: report.id,
+    case_id: report.case_id,
+    status: report.status,
+    created_at: report.created_at,
+    metadata: { generated_by: report.created_by }
   });
 });
 
@@ -23,11 +38,33 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
  * GET /api/reports/:id/export
  */
 router.get('/:id/export', async (req: AuthenticatedRequest, res: Response) => {
-  // Mock exporting report
-  return res.status(200).json({ 
-    id: req.params.id,
-    download_url: `/exports/report-${req.params.id}.pdf`
-  });
+  const report = await db.getReport(req.params.id);
+  if (!report) {
+    return res.status(404).json({ error: 'NOT_FOUND', message: 'Report not found' });
+  }
+
+  try {
+    await AuthMiddleware.authorizeCaseAccess({ userId: req.user!.id, caseId: report.case_id });
+  } catch (e) {
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'Not authorized to export reports for this case' });
+  }
+
+  if (report.status !== 'COMPLETED' || !report.storage_uri) {
+    return res.status(400).json({ error: 'NOT_READY', message: 'Report is still generating or failed' });
+  }
+
+  const fileName = report.storage_uri.replace('local://', '');
+  const filePath = path.resolve(REPORTS_DIR, fileName);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'NOT_FOUND', message: 'PDF file missing on disk' });
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  
+  const readStream = fs.createReadStream(filePath);
+  readStream.pipe(res);
 });
 
 export default router;
