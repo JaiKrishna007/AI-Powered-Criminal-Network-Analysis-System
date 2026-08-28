@@ -42,43 +42,43 @@ export class GraphStore {
     return this.neo4jActive;
   }
 
-  public async addEntity(entity: ENTITY_v1, auth?: AuthContext): Promise<void> {
+  public async addEntity(entity: ENTITY_v1, auth: AuthContext): Promise<void> {
     return this.repository.addEntity(entity, auth);
   }
 
-  public async addRelationship(rel: REL_v1, auth?: AuthContext): Promise<void> {
+  public async addRelationship(rel: REL_v1, auth: AuthContext): Promise<void> {
     return this.repository.addRelationship(rel, auth);
   }
 
-  public async getEntity(id: string, auth?: AuthContext): Promise<ENTITY_v1 | undefined> {
+  public async getEntity(id: string, auth: AuthContext): Promise<ENTITY_v1 | undefined> {
     return this.repository.getEntity(id, auth);
   }
 
-  public async getRelationship(id: string, auth?: AuthContext): Promise<REL_v1 | undefined> {
+  public async getRelationship(id: string, auth: AuthContext): Promise<REL_v1 | undefined> {
     return this.repository.getRelationship(id, auth);
   }
 
-  public async getAllEntitiesForCase(caseId: string, auth?: AuthContext): Promise<ENTITY_v1[]> {
+  public async getAllEntitiesForCase(caseId: string, auth: AuthContext): Promise<ENTITY_v1[]> {
     return this.repository.getAllEntitiesForCase(caseId, auth);
   }
 
-  public async getAllRelationshipsForCase(caseId: string, auth?: AuthContext): Promise<REL_v1[]> {
+  public async getAllRelationshipsForCase(caseId: string, auth: AuthContext): Promise<REL_v1[]> {
     return this.repository.getAllRelationshipsForCase(caseId, auth);
   }
 
   public async getGraphForCase(
     caseId: string,
-    auth?: AuthContext,
+    auth: AuthContext,
     maxNodes: number = 1000
   ): Promise<GRAPH_v1> {
     return this.repository.getCaseGraph(caseId, auth, maxNodes);
   }
 
-  public async getAuthorizedAnalyticsGraph(caseId: string, auth?: AuthContext): Promise<GRAPH_v1> {
+  public async getAuthorizedAnalyticsGraph(caseId: string, auth: AuthContext): Promise<GRAPH_v1> {
     return this.repository.getAuthorizedAnalyticsGraph(caseId, auth);
   }
 
-  public async extractFocusedSubgraph(options: FocusedSubgraphOptions, auth?: AuthContext): Promise<GRAPH_v1> {
+  public async extractFocusedSubgraph(options: FocusedSubgraphOptions, auth: AuthContext): Promise<GRAPH_v1> {
     return this.repository.getFocusedSubgraph(options, auth);
   }
 

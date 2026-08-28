@@ -82,30 +82,47 @@ export class Neo4jGraphRepository implements GraphRepository {
     }
   }
 
-  private checkAuthContext(caseId: string, auth?: AuthContext): void {
-    if (auth && !auth.allowed_case_ids.includes(caseId)) {
+  private checkAuthContext(caseId: string, auth: AuthContext): void {
+    if (!auth.allowed_case_ids.includes(caseId)) {
       throw new Error(`Unauthorized access to case_id: ${caseId}`);
     }
   }
 
-  public async addEntity(entity: ENTITY_v1, auth?: AuthContext): Promise<void> {
+  public async addEntity(entity: ENTITY_v1, auth: AuthContext): Promise<void> {
     if (!entity.case_id) {
       throw new Error(`Cannot add entity without case_id: ${entity.id}`);
     }
     this.checkAuthContext(entity.case_id, auth);
-    const label = entity.type;
-    const props = {
-      id: entity.id,
-      case_id: entity.case_id || "",
-      ...(entity.event_time ? { event_time: entity.event_time } : {}),
-      ...(entity.properties || {}),
-    };
-    // Note: dynamic labels require concatenation, safe as label comes from entity.type mapping
-    const query = `MERGE (n:\`${label}\` {id: $props.id}) SET n += $props`;
-    await this.executeCypher(query, { props });
+
+    const checkQuery = `MATCH (n {id: $id}) RETURN n.case_id AS caseId`;
+    const checkRes = await this.executeCypher(checkQuery, { id: entity.id });
+    
+    if (checkRes.length > 0) {
+      const existingCaseId = checkRes[0].get("caseId");
+      if (existingCaseId !== entity.case_id) {
+        throw new Error(`Entity ${entity.id} already exists in a different case. Cross-case contamination is not allowed.`);
+      }
+      
+      const label = entity.type;
+      const updateProps = { ...entity.properties };
+      if (entity.event_time) updateProps.event_time = entity.event_time;
+      
+      const updateQuery = `MATCH (n:\`${label}\` {id: $id, case_id: $caseId}) SET n += $updateProps`;
+      await this.executeCypher(updateQuery, { id: entity.id, caseId: entity.case_id, updateProps });
+    } else {
+      const label = entity.type;
+      const props = {
+        id: entity.id,
+        case_id: entity.case_id,
+        ...(entity.event_time ? { event_time: entity.event_time } : {}),
+        ...(entity.properties || {}),
+      };
+      const query = `CREATE (n:\`${label}\` {id: $props.id}) SET n += $props`;
+      await this.executeCypher(query, { props });
+    }
   }
 
-  public async addRelationship(rel: REL_v1, auth?: AuthContext): Promise<void> {
+  public async addRelationship(rel: REL_v1, auth: AuthContext): Promise<void> {
     this.checkAuthContext(rel.case_id, auth);
     validateRelTypes([rel.type]);
 
@@ -140,15 +157,13 @@ export class Neo4jGraphRepository implements GraphRepository {
     }
   }
 
-  public async getEntity(id: string, auth?: AuthContext): Promise<ENTITY_v1 | undefined> {
-    const caseFilter = auth && auth.allowed_case_ids.length > 0
-      ? `AND n.case_id IN $allowedCases`
-      : ``;
+  public async getEntity(id: string, auth: AuthContext): Promise<ENTITY_v1 | undefined> {
+    const caseFilter = `AND n.case_id IN $allowedCases`;
 
     const query = `MATCH (n) WHERE n.id = $id ${caseFilter} RETURN n`;
     const records = await this.executeCypher(query, { 
       id, 
-      allowedCases: auth?.allowed_case_ids || [] 
+      allowedCases: auth.allowed_case_ids
     });
     if (records.length === 0) return undefined;
 
@@ -162,15 +177,13 @@ export class Neo4jGraphRepository implements GraphRepository {
     return entity;
   }
 
-  public async getRelationship(id: string, auth?: AuthContext): Promise<REL_v1 | undefined> {
-    const caseFilter = auth && auth.allowed_case_ids.length > 0
-      ? `AND r.case_id IN $allowedCases`
-      : ``;
+  public async getRelationship(id: string, auth: AuthContext): Promise<REL_v1 | undefined> {
+    const caseFilter = `AND r.case_id IN $allowedCases`;
 
     const query = `MATCH ()-[r]->() WHERE r.id = $id ${caseFilter} RETURN r, startNode(r).id as source, endNode(r).id as target, type(r) as type`;
     const records = await this.executeCypher(query, { 
       id,
-      allowedCases: auth?.allowed_case_ids || [] 
+      allowedCases: auth.allowed_case_ids
     });
     if (records.length === 0) return undefined;
 
@@ -185,7 +198,7 @@ export class Neo4jGraphRepository implements GraphRepository {
     return rel;
   }
 
-  public async getAllEntitiesForCase(caseId: string, auth?: AuthContext): Promise<ENTITY_v1[]> {
+  public async getAllEntitiesForCase(caseId: string, auth: AuthContext): Promise<ENTITY_v1[]> {
     this.checkAuthContext(caseId, auth);
     const query = `MATCH (n {case_id: $caseId}) RETURN n`;
     const records = await this.executeCypher(query, { caseId });
@@ -195,7 +208,7 @@ export class Neo4jGraphRepository implements GraphRepository {
     });
   }
 
-  public async getAllRelationshipsForCase(caseId: string, auth?: AuthContext): Promise<REL_v1[]> {
+  public async getAllRelationshipsForCase(caseId: string, auth: AuthContext): Promise<REL_v1[]> {
     this.checkAuthContext(caseId, auth);
     const query = `MATCH ()-[r {case_id: $caseId}]->() RETURN r, startNode(r).id as source, endNode(r).id as target, type(r) as type`;
     const records = await this.executeCypher(query, { caseId });
@@ -205,7 +218,7 @@ export class Neo4jGraphRepository implements GraphRepository {
     });
   }
 
-  public async getCaseGraph(caseId: string, auth?: AuthContext, maxNodes: number = 1000): Promise<GRAPH_v1> {
+  public async getCaseGraph(caseId: string, auth: AuthContext, maxNodes: number = 1000): Promise<GRAPH_v1> {
     this.checkAuthContext(caseId, auth);
     validateBounds(maxNodes, "maxNodes");
     
@@ -248,7 +261,7 @@ export class Neo4jGraphRepository implements GraphRepository {
     };
   }
 
-  public async getAuthorizedAnalyticsGraph(caseId: string, auth?: AuthContext): Promise<GRAPH_v1> {
+  public async getAuthorizedAnalyticsGraph(caseId: string, auth: AuthContext): Promise<GRAPH_v1> {
     this.checkAuthContext(caseId, auth);
     
     const query = `
@@ -286,18 +299,13 @@ export class Neo4jGraphRepository implements GraphRepository {
     };
   }
 
-  public async getFocusedSubgraph(options: FocusedSubgraphOptions, auth?: AuthContext): Promise<GRAPH_v1> {
+  public async getFocusedSubgraph(options: FocusedSubgraphOptions, auth: AuthContext): Promise<GRAPH_v1> {
     this.checkAuthContext(options.case_id, auth);
     const { case_id, seed_ids, max_hops = 2, time_start, time_end, rel_types, max_nodes = 100 } = options;
     
     validateBounds(max_hops, "max_hops");
     validateBounds(max_nodes, "max_nodes");
     validateRelTypes(rel_types);
-
-    let relFilter = "";
-    if (rel_types && rel_types.length > 0) {
-      relFilter = ":" + rel_types.join("|");
-    }
 
     let timeCondition = "TRUE";
     if (time_start && time_end) {
@@ -321,21 +329,17 @@ export class Neo4jGraphRepository implements GraphRepository {
       MATCH p = (seed)-[*0..${max_hops}]-(target)
       WHERE seed.id IN $seed_ids AND seed.case_id = $case_id AND target.case_id = $case_id
       
-      WITH target, relationships(p) as rels
-      WHERE ALL(r IN rels WHERE r.case_id = $case_id AND ${timeCondition} ${
-        rel_types && rel_types.length > 0 ? "AND type(r) IN $rel_types" : ""
-      })
+      WITH collect(DISTINCT target) as allNodes
+      WITH allNodes[0..toInteger($max_nodes)] as selectedNodes, size(allNodes) > toInteger($max_nodes) AS truncated
       
-      WITH collect(DISTINCT target) as allNodes, collect(DISTINCT rels) as allPaths
-      WITH allNodes[0..toInteger($max_nodes)] as selectedNodes, allPaths, size(allNodes) > toInteger($max_nodes) AS truncated
-      
-      UNWIND allPaths AS pathRels
-      UNWIND pathRels AS r
-      WITH selectedNodes, truncated, r
-      WHERE startNode(r) IN selectedNodes AND endNode(r) IN selectedNodes
+      UNWIND selectedNodes AS n
+      OPTIONAL MATCH (n)-[r]-(m)
+      WHERE m IN selectedNodes AND r.case_id = $case_id 
+        AND ${timeCondition}
+        ${rel_types && rel_types.length > 0 ? "AND type(r) IN $rel_types" : ""}
       
       RETURN 
-        selectedNodes as nodes, 
+        collect(DISTINCT n) as nodes, 
         collect(DISTINCT r) as edges,
         collect(DISTINCT [r, startNode(r).id, endNode(r).id, type(r)]) AS edgeDetails,
         truncated

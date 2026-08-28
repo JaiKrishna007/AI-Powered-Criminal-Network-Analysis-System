@@ -22,6 +22,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     actor_id: "agent_tester",
     correlation_id: "corr_test_100",
     allowed_case_ids: ["CASE-001"],
+    role: "admin",
   };
 
   beforeEach(() => {
@@ -160,7 +161,8 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     const diff = await temporalEngine.compareSnapshots(
       "CASE-001",
       "2026-08-01T00:00:00Z",
-      "2026-08-03T00:00:00Z"
+      "2026-08-03T00:00:00Z",
+      auth
     );
 
     expect(diff.added.length).toBe(1);
@@ -191,13 +193,14 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     );
 
     const temporalEngine = new TemporalEngine(store);
-    const snapT2 = await temporalEngine.getSnapshotAt("CASE-001", "2026-08-02T00:00:00Z");
+    const snapT2 = await temporalEngine.getSnapshotAt("CASE-001", "2026-08-02T00:00:00Z", auth);
     expect(snapT2.edges.find((e) => e.id === "rel_removed")).toBeUndefined();
 
     const diff = await temporalEngine.compareSnapshots(
       "CASE-001",
       "2026-08-01T06:00:00Z",
-      "2026-08-02T00:00:00Z"
+      "2026-08-02T00:00:00Z",
+      auth
     );
     expect(diff.removed.length).toBe(1);
     expect(diff.removed[0].id).toBe("rel_removed");

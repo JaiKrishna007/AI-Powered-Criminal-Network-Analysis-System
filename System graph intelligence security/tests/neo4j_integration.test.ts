@@ -69,8 +69,8 @@ describe.runIf(NEO4J_URI)('Neo4j Real Runtime Verification', () => {
       { id: 'r1', source: 'p1', target: 'p2', type: 'CALLED', case_id: 'case-a', evidence_ids: ['ev1'] },
     ];
 
-    await repo.saveEntities(nodes);
-    await repo.saveRelationships(edges);
+    for (const n of nodes) await repo.addEntity(n, authA);
+    for (const e of edges) await repo.addRelationship(e, authA);
 
     const graph = await repo.getCaseGraph('case-a', authA, 100);
     expect(graph.nodes.length).toBe(2);
@@ -88,24 +88,25 @@ describe.runIf(NEO4J_URI)('Neo4j Real Runtime Verification', () => {
 
   it('should correctly filter case graph by authorization bounds', async () => {
     const nodes: ENTITY_v1[] = [
-      { id: 'p1', type: 'Person', case_id: 'case-a' },
-      { id: 'p2', type: 'Person', case_id: 'case-b' },
+      { id: 'p1_auth', type: 'Person', case_id: 'case-a' },
+      { id: 'p2_auth', type: 'Person', case_id: 'case-b' },
     ];
-    await repo.saveEntities(nodes);
+    await repo.addEntity(nodes[0], authA);
+    await repo.addEntity(nodes[1], authB);
 
     // Should throw if case-b is requested but auth only has case-a
     await expect(repo.getCaseGraph('case-b', authA, 100)).rejects.toThrow('Unauthorized access');
 
     const graphA = await repo.getCaseGraph('case-a', authA, 100);
-    expect(graphA.nodes.length).toBe(1);
-    expect(graphA.nodes[0].id).toBe('p1');
+    expect(graphA.nodes.length).toBe(1); // Wait, there's a p1 from previous test because DETACH DELETE runs per test. No, wait, p1 is id conflict. So p1_auth
+    expect(graphA.nodes[0].id).toBe('p1_auth');
 
     const graphB = await repo.getCaseGraph('case-b', authB, 100);
     expect(graphB.nodes.length).toBe(1);
-    expect(graphB.nodes[0].id).toBe('p2');
+    expect(graphB.nodes[0].id).toBe('p2_auth');
   });
 
-  it('should successfully extract a variable-length focused subgraph', async () => {
+  it('should successfully extract a variable-length focused subgraph including max_hops = 0', async () => {
     const nodes: ENTITY_v1[] = [
       { id: 'n1', type: 'Person', case_id: 'case-a' },
       { id: 'n2', type: 'Phone', case_id: 'case-a' },
@@ -117,17 +118,23 @@ describe.runIf(NEO4J_URI)('Neo4j Real Runtime Verification', () => {
       { id: 'e2', source: 'n2', target: 'n3', type: 'CALLED', case_id: 'case-a', evidence_ids: [] },
       { id: 'e3', source: 'n3', target: 'n4', type: 'OWNED', case_id: 'case-a', evidence_ids: [] },
     ];
-    await repo.saveEntities(nodes);
-    await repo.saveRelationships(edges);
+    for (const n of nodes) await repo.addEntity(n, authA);
+    for (const e of edges) await repo.addRelationship(e, authA);
+
+    // Distance 0 from n1 -> Should include ONLY n1 and NO edges
+    const sub0 = await repo.getFocusedSubgraph({ case_id: 'case-a', seed_ids: ['n1'], max_hops: 0 }, authA);
+    expect(sub0.nodes.length).toBe(1);
+    expect(sub0.edges.length).toBe(0);
+    expect(sub0.nodes[0].id).toBe('n1');
 
     // Distance 1 from n1 -> Should include n1, n2 and e1
-    const sub1 = await repo.getFocusedSubgraph('case-a', ['n1'], authA, 1, 100, 100);
+    const sub1 = await repo.getFocusedSubgraph({ case_id: 'case-a', seed_ids: ['n1'], max_hops: 1 }, authA);
     expect(sub1.nodes.length).toBe(2);
     expect(sub1.edges.length).toBe(1);
     expect(sub1.nodes.map(n => n.id).sort()).toEqual(['n1', 'n2']);
 
     // Distance 2 from n1 -> Should include n1, n2, n3 and e1, e2
-    const sub2 = await repo.getFocusedSubgraph('case-a', ['n1'], authA, 2, 100, 100);
+    const sub2 = await repo.getFocusedSubgraph({ case_id: 'case-a', seed_ids: ['n1'], max_hops: 2 }, authA);
     expect(sub2.nodes.length).toBe(3);
     expect(sub2.edges.length).toBe(2);
     expect(sub2.nodes.map(n => n.id).sort()).toEqual(['n1', 'n2', 'n3']);
@@ -136,9 +143,9 @@ describe.runIf(NEO4J_URI)('Neo4j Real Runtime Verification', () => {
   it('should extract authorized analytics graph independently of max_nodes truncations', async () => {
     // Insert 5 nodes
     const nodes: ENTITY_v1[] = Array.from({ length: 5 }, (_, i) => ({
-      id: `n${i}`, type: 'Person', case_id: 'case-a'
+      id: `ana${i}`, type: 'Person', case_id: 'case-a'
     }));
-    await repo.saveEntities(nodes);
+    for (const n of nodes) await repo.addEntity(n, authA);
 
     // Visual graph is bounded (max_nodes = 2)
     const visualGraph = await repo.getCaseGraph('case-a', authA, 2);

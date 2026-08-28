@@ -29,7 +29,7 @@ export class FocusedSubgraphExtractor {
 
   public async extractFocusedSubgraph(
     options: FocusedSubgraphOptions,
-    auth?: AuthContext
+    auth: AuthContext
   ): Promise<GRAPH_v1> {
     const {
       case_id,
@@ -42,7 +42,7 @@ export class FocusedSubgraphExtractor {
     } = options;
 
     // Check auth context for case access
-    if (auth && !auth.allowed_case_ids.includes(case_id)) {
+    if (!auth.allowed_case_ids.includes(case_id)) {
       throw new Error(`Unauthorized access to case_id: ${case_id}`);
     }
 
@@ -60,8 +60,8 @@ export class FocusedSubgraphExtractor {
 
     if (time_start || time_end) {
       caseEdges = caseEdges.filter((e) => {
-        const edgeStart = e.event_time || e.effective_start || e.valid_from || (e.properties && (e.properties.effective_start || e.properties.valid_from));
-        const edgeEnd = e.effective_end || e.valid_to || (e.properties && (e.properties.effective_end || e.properties.valid_to));
+        const edgeStart = e.event_time || e.effective_start || (e.properties && e.properties.effective_start);
+        const edgeEnd = e.effective_end || (e.properties && e.properties.effective_end);
         
         if (!edgeStart && !edgeEnd) return false; // Exclude unknown timestamps
 

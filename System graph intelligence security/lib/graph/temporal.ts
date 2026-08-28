@@ -5,7 +5,7 @@
  * CRITICAL: Missing timestamps remain UNKNOWN. No fabrication or interpolation.
  */
 
-import { REL_v1, ENTITY_v1, GRAPH_v1 } from "../contracts/types.js";
+import { REL_v1, ENTITY_v1, GRAPH_v1, AuthContext } from "../contracts/types.js";
 import { GraphStore } from "./store.js";
 
 export interface TemporalDiffResult {
@@ -24,8 +24,6 @@ export function getCanonicalEdgeHash(e: REL_v1): string {
     type: e.type,
     case_id: e.case_id,
     event_time: e.event_time,
-    valid_from: e.valid_from,
-    valid_to: e.valid_to,
     effective_start: e.effective_start,
     effective_end: e.effective_end,
     evidence_ids: [...(e.evidence_ids || [])].sort(),
@@ -45,11 +43,11 @@ export class TemporalEngine {
   constructor(private store: GraphStore) {}
 
   private getEdgeStart(e: any): string | undefined {
-    return e.event_time || e.effective_start || e.valid_from || (e.properties && (e.properties.effective_start || e.properties.valid_from));
+    return e.event_time || e.effective_start || (e.properties && e.properties.effective_start);
   }
 
   private getEdgeEnd(e: any): string | undefined {
-    return e.effective_end || e.valid_to || (e.properties && (e.properties.effective_end || e.properties.valid_to));
+    return e.effective_end || (e.properties && e.properties.effective_end);
   }
 
   /**
@@ -57,7 +55,7 @@ export class TemporalEngine {
    * and end is undefined or >= T).
    * Relationships without timestamps are classified as UNKNOWN and excluded from strict time snapshot.
    */
-  public async getSnapshotAt(caseId: string, timestamp: string, auth?: any): Promise<GRAPH_v1> {
+  public async getSnapshotAt(caseId: string, timestamp: string, auth: AuthContext): Promise<GRAPH_v1> {
     const caseNodes = await this.store.getAllEntitiesForCase(caseId, auth);
     const caseEdges = await this.store.getAllRelationshipsForCase(caseId, auth);
 
@@ -108,7 +106,7 @@ export class TemporalEngine {
     caseId: string,
     time1: string,
     time2: string,
-    auth?: any
+    auth: AuthContext
   ): Promise<TemporalDiffResult> {
     const snap1 = await this.getSnapshotAt(caseId, time1, auth);
     const snap2 = await this.getSnapshotAt(caseId, time2, auth);
@@ -155,7 +153,7 @@ export class TemporalEngine {
   /**
    * Filter relationships within [T - before, T + after] incident window.
    */
-  public async getIncidentWindowGraph(options: IncidentWindowOptions, auth?: any): Promise<GRAPH_v1> {
+  public async getIncidentWindowGraph(options: IncidentWindowOptions, auth: AuthContext): Promise<GRAPH_v1> {
     const { case_id, anchor_time, before_ms, after_ms } = options;
 
     const anchorMs = new Date(anchor_time).getTime();

@@ -56,6 +56,7 @@ describe("GraphStore Operations and Security", () => {
     actor_id: "investigator_007",
     correlation_id: "corr_999",
     allowed_case_ids: ["CASE-001"],
+    role: "admin",
   };
 
   beforeEach(() => {
@@ -93,6 +94,7 @@ describe("GraphStore Operations and Security", () => {
       actor_id: "guest",
       correlation_id: "corr_000",
       allowed_case_ids: ["CASE-002"],
+      role: "admin",
     };
 
     await expect(store.getGraphForCase("CASE-001", unauthorizedAuth)).rejects.toThrow();

@@ -99,7 +99,7 @@ export class ReportGenerator {
 
     const allCaseEdges = await this.store.getAllRelationshipsForCase(caseId, auth);
     const unknownTimestampsCount = allCaseEdges.filter(
-      (e) => !e.event_time && !e.effective_start && !e.valid_from && !(e.properties && (e.properties.effective_start || e.properties.valid_from))
+      (e) => !e.event_time && !e.effective_start && !(e.properties && e.properties.effective_start)
     ).length;
 
     // Bridge findings using the unbounded authorized analytics graph
@@ -181,7 +181,7 @@ export class ReportGenerator {
         diff_added: temporalDiff.added,
         diff_removed: temporalDiff.removed,
         diff_changed: temporalDiff.changed,
-        timeline_events: graph.edges.filter((e) => !!e.event_time || !!e.effective_start || !!e.valid_from),
+        timeline_events: graph.edges.filter((e) => !!e.event_time || !!e.effective_start),
         unknown_timestamps_count: unknownTimestampsCount,
       },
       section_6_bridge_findings: bridgeFindings,

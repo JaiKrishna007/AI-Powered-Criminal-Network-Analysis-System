@@ -7,6 +7,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:neo4j": "vitest run tests/neo4j_integration.test.ts",
     "build": "tsc"
   },
   "dependencies": {
