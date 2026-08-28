@@ -78,7 +78,8 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     const allEntities = await store.getAllEntitiesForCase("CASE-001", auth);
     const allRels = await store.getAllRelationshipsForCase("CASE-001", auth);
 
-    const insights = bridgeDetector.detectBridges("CASE-001", allEntities, allRels);
+    const result = bridgeDetector.detectBridges("CASE-001", allEntities, allRels);
+    const insights = result.map(r => r.insight);
 
     expect(insights.length).toBe(1);
     expect(insights[0].target_entity_ids).toEqual(["X"]);
@@ -123,11 +124,12 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     }
 
     const bridgeDetector = new BridgeDetector();
-    const insights = bridgeDetector.detectBridges(
+    const result = bridgeDetector.detectBridges(
       "CASE-001",
       await store.getAllEntitiesForCase("CASE-001", auth),
       await store.getAllRelationshipsForCase("CASE-001", auth)
     );
+    const insights = result.map(r => r.insight);
 
     expect(insights.length).toBe(0);
   });

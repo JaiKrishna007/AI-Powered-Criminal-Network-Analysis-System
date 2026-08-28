@@ -19,6 +19,15 @@ function getEdgeEffectiveTime(e: any): number | undefined {
   return undefined;
 }
 
+export interface BridgeScoreDetails {
+  normalizedBetweenness: number;
+  articulationSignal: number;
+  crossClusterConnectivity: number;
+  evidenceDensity: number;
+  temporalRelevance: number;
+  bridgeScore: number;
+}
+
 export class BridgeDetector {
   private clusterDetector = new ClusterDetector();
   private centralityAnalyzer = new CentralityAnalyzer();
@@ -30,7 +39,7 @@ export class BridgeDetector {
     caseId: string,
     nodes: ENTITY_v1[],
     edges: REL_v1[]
-  ): INSIGHT_v1[] {
+  ): Array<{ insight: INSIGHT_v1; details: BridgeScoreDetails }> {
     if (nodes.length <= 2 || edges.length === 0) {
       return [];
     }
@@ -147,7 +156,7 @@ export class BridgeDetector {
     const maxScore = bridgeCandidates[0].bridgeScore;
     const topCandidates = bridgeCandidates.filter((c) => c.bridgeScore === maxScore);
 
-    const insights: INSIGHT_v1[] = [];
+    const insights: Array<{ insight: INSIGHT_v1; details: BridgeScoreDetails }> = [];
 
     for (const candidate of topCandidates) {
       const candidateNode = nodes.find((n) => n.id === candidate.id)!;
@@ -160,14 +169,20 @@ export class BridgeDetector {
       );
 
       insights.push({
-        id: `bridge_${candidate.id}_${Date.now()}`,
-        case_id: caseId,
-        type: "POTENTIAL_BRIDGE",
-        title: `Potential Structural Bridge Identified: ${candidate.id}`,
-        description: `Entity ${candidate.id} (${candidateNode.type}) acts as a structural connector bridging distinct clusters. Score: ${candidate.bridgeScore.toFixed(3)}.`,
-        target_entity_ids: [candidate.id],
-        evidence_ids: evidenceIds,
-        timestamp: new Date().toISOString()
+        insight: {
+          id: `bridge_${candidate.id}_${Date.now()}`,
+          case_id: caseId,
+          type: "POTENTIAL_BRIDGE",
+          title: `Potential Structural Bridge Identified: ${candidate.id}`,
+          description: `Entity ${candidate.id} (${candidateNode.type}) acts as a structural connector bridging distinct clusters. Score: ${candidate.bridgeScore.toFixed(3)}.`,
+          target_entity_ids: [candidate.id],
+          evidence_ids: evidenceIds,
+          timestamp: new Date().toISOString()
+        },
+        details: {
+          ...candidate.scoreDetails,
+          bridgeScore: candidate.bridgeScore
+        }
       });
     }
 

@@ -27,7 +27,7 @@ describe.runIf(NEO4J_URI)('Neo4j Real Runtime Verification', () => {
 
   beforeAll(async () => {
     driver = neo4j.driver(NEO4J_URI || 'bolt://localhost:7687', neo4j.auth.basic('neo4j', 'testpassword'));
-    repo = new Neo4jGraphRepository(driver);
+    repo = Neo4jGraphRepository.fromDriver(driver);
     
     // Wait for DB to be ready
     let retries = 5;

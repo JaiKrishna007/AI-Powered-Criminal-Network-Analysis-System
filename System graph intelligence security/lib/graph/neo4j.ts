@@ -52,6 +52,12 @@ export class Neo4jGraphRepository implements GraphRepository {
     }
   }
 
+  public static fromDriver(driver: Driver): Neo4jGraphRepository {
+    const repo = new Neo4jGraphRepository();
+    repo.driver = driver;
+    return repo;
+  }
+
   public isConnected(): boolean {
     return this.driver !== null;
   }

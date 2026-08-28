@@ -76,7 +76,13 @@ export class ReportGenerator {
 
     let computedVersion = report_version;
     if (!computedVersion) {
-      computedVersion = `1.${previousReports.length}`;
+      if (latestReport && latestReport.section_11_version_audit) {
+        const lastVerStr = latestReport.section_11_version_audit.report_version;
+        const lastVerNum = parseInt(lastVerStr.replace('v', ''), 10) || 0;
+        computedVersion = `v${lastVerNum + 1}`;
+      } else {
+        computedVersion = `v1`;
+      }
     }
 
     let effectiveTimeStart = time_start;
@@ -97,20 +103,23 @@ export class ReportGenerator {
     ).length;
 
     // Bridge findings using the unbounded authorized analytics graph
-    const bridgeFindings = this.bridgeDetector.detectBridges(
+    const bridgeResult = this.bridgeDetector.detectBridges(
       caseId,
       analyticsGraph.nodes,
       analyticsGraph.edges
     );
+    const bridgeFindings = bridgeResult.map(r => r.insight);
 
     // XAI Explainable findings (Issue 18: Translate bridge insights into explicit XAI formats)
-    const explainableFindings: INSIGHT_v1[] = bridgeFindings.map(insight => {
-      const properties: any = (insight as any).properties || {};
+    const explainableFindings: INSIGHT_v1[] = bridgeResult.map(r => {
+      const insight = r.insight;
+      const details = r.details;
       
       return {
         ...insight,
+        id: `explain_${insight.id}`,
         title: `Explainability Details: ${insight.title}`,
-        description: `Reasoning: Node ${insight.target_entity_ids[0]} acts as an articulation point or strong bridge (Betweenness: ${properties.normalizedBetweenness?.toFixed(2) || 'N/A'}, Cross-community density: ${properties.crossCommunityDegree?.toFixed(2) || 'N/A'}). Temporal relevance: ${properties.temporalRelevance?.toFixed(2) || 'N/A'}. Confidence: ${properties.bridgeScore || 0}. Limitations: Algorithm uses MVP connected components. Cross-community density is an approximation.`
+        description: `Reasoning: Node ${insight.target_entity_ids[0]} acts as an articulation point or strong bridge (Betweenness: ${details.normalizedBetweenness?.toFixed(2) || 'N/A'}, Cross-community density: ${details.crossClusterConnectivity?.toFixed(2) || 'N/A'}). Temporal relevance: ${details.temporalRelevance?.toFixed(2) || 'N/A'}. Confidence: ${details.bridgeScore || 0}. Limitations: Algorithm uses MVP connected components. Cross-community density is an approximation.`
       };
     });
 
