@@ -35,4 +35,8 @@ export class GraphContextClient {
   static async getFocusedGraph(rawContext: string, signature: string, entityId: string, hops: number = 2, correlationId?: string): Promise<GRAPH_v1> {
     return this.fetchD4('/graph/focused', rawContext, { entityId, hops }, signature, correlationId);
   }
+
+  static async getTemporalGraph(rawContext: string, signature: string, query: string, entityId?: string, correlationId?: string): Promise<any> {
+    return this.fetchD4('/graph/temporal', rawContext, { query, entityId }, signature, correlationId);
+  }
 }

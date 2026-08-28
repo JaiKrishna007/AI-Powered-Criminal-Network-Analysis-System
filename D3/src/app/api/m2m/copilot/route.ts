@@ -32,32 +32,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
     }
 
-    // 2. Explicit Query Routing (Intent Detection)
+    // 2. Query Routing & Intent Detection (Issue #8)
     const lowerQuery = query.toLowerCase();
     const isTemporal = lowerQuery.includes('when') || lowerQuery.includes('before') || lowerQuery.includes('after') || lowerQuery.includes('changed');
     const isGraph = lowerQuery.includes('bridge') || lowerQuery.includes('connection') || lowerQuery.includes('connects') || lowerQuery.includes('relationship') || focusEntityId;
     
-    let graphContext = "";
-    if (isGraph || isTemporal) {
-      if (focusEntityId) {
+    let graphContextParts: string[] = [];
+    
+    if (focusEntityId) {
+      if (isGraph) {
         try {
-          if (isTemporal) {
-            graphContext = "Temporal graph context delegated to D4. (MOCK RESPONSE FOR TEMPORAL)";
-          } else {
-            // Forward RAW authHeader instead of parsed authContext!
-            const subgraph = await GraphContextClient.getFocusedGraph(authHeader, signature, focusEntityId, 1);
-            graphContext = JSON.stringify(subgraph);
-          }
+          const subgraph = await GraphContextClient.getFocusedGraph(authHeader, signature, focusEntityId, 1);
+          graphContextParts.push("Graph Context: " + JSON.stringify(subgraph));
         } catch (e: any) {
           console.warn("Failed to retrieve graph context from D4:", e.message);
-          graphContext = "No specific entity focused or graph context unavailable.";
         }
-      } else {
-        graphContext = "Graph/Temporal intent detected, but no specific focusEntityId was provided by D2 to anchor the search.";
       }
-    } else {
-      graphContext = "Pure semantic query. Graph routing bypassed.";
+      
+      if (isTemporal) {
+        try {
+          // Actual D4 temporal client operation (Issue #7)
+          const temporalGraph = await GraphContextClient.getTemporalGraph(authHeader, signature, query, focusEntityId);
+          graphContextParts.push("Temporal Context: " + JSON.stringify(temporalGraph));
+        } catch (e: any) {
+          console.warn("Failed to retrieve temporal context from D4:", e.message);
+        }
+      }
+    } else if (isGraph || isTemporal) {
+      graphContextParts.push("Graph/Temporal intent detected, but no specific focusEntityId was provided by D2 to anchor the search.");
     }
+
+    const graphContext = graphContextParts.length > 0 ? graphContextParts.join('\n\n') : "Pure semantic query. Graph routing bypassed.";
 
     // 3. Vector Retrieval (Qdrant)
     let evidenceContext = "No relevant text chunks retrieved.";
@@ -74,7 +79,7 @@ export async function POST(request: Request) {
           must: [
             {
               key: 'case_id',
-              match: { value: authContext.case_id }
+              match: { any: authContext.allowed_case_ids || [authContext.case_id] } // Issue #6: use allowed_case_ids
             }
           ]
         },
