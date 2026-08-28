@@ -68,11 +68,27 @@ export class ReportGenerator {
     }
 
     const graph = await this.store.getGraphForCase(caseId, auth, max_nodes);
+    const analyticsGraph = await this.store.getAuthorizedAnalyticsGraph(caseId, auth);
 
-    // Temporal findings (Use actual Temporal Engine Diff if timestamps provided, else snapshot)
-    let temporalDiff: any = {};
-    if (time_start && time_end) {
-      temporalDiff = await this.temporalEngine.compareSnapshots(caseId, time_start, time_end);
+    const previousReports = await this.reportRepository.getReportsByCase(caseId);
+    previousReports.sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime());
+    const latestReport = previousReports.length > 0 ? previousReports[0] : undefined;
+
+    let computedVersion = report_version;
+    if (!computedVersion) {
+      computedVersion = `1.${previousReports.length}`;
+    }
+
+    let effectiveTimeStart = time_start;
+    if (!effectiveTimeStart && latestReport) {
+      effectiveTimeStart = latestReport.generated_at;
+    }
+    const effectiveTimeEnd = time_end || new Date().toISOString();
+
+    // Temporal findings (Use actual Temporal Engine Diff if timestamps provided or inferred)
+    let temporalDiff: any = { added: [], removed: [], changed: [], unknown_timestamps_count: 0 };
+    if (effectiveTimeStart) {
+      temporalDiff = await this.temporalEngine.compareSnapshots(caseId, effectiveTimeStart, effectiveTimeEnd, auth);
     }
 
     const allCaseEdges = await this.store.getAllRelationshipsForCase(caseId, auth);
@@ -80,11 +96,11 @@ export class ReportGenerator {
       (e) => !e.event_time && !e.effective_start && !e.valid_from && !(e.properties && (e.properties.effective_start || e.properties.valid_from))
     ).length;
 
-    // Bridge findings
+    // Bridge findings using the unbounded authorized analytics graph
     const bridgeFindings = this.bridgeDetector.detectBridges(
       caseId,
-      graph.nodes,
-      graph.edges
+      analyticsGraph.nodes,
+      analyticsGraph.edges
     );
 
     // XAI Explainable findings (Issue 18: Translate bridge insights into explicit XAI formats)
@@ -176,7 +192,7 @@ export class ReportGenerator {
           "This report presents structural and temporal graph relationships. No legal or criminal culpability is inferred.",
       },
       section_11_version_audit: {
-        report_version: report_version || `1.0.${Math.floor(Date.now() / 1000)}`,
+        report_version: computedVersion,
         audit_events: auditEvents,
       },
     };

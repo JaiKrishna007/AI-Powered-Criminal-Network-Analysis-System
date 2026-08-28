@@ -59,7 +59,23 @@ export class MLClient {
    */
   async predictEntityMatch(req: EntityMatchRequest): Promise<EntityMatchResponse> {
     const url = `${this.baseUrl}/predict/entity-match`;
-    return this.postJson<EntityMatchRequest, EntityMatchResponse>(url, req);
+    try {
+      return await this.postJson<EntityMatchRequest, EntityMatchResponse>(url, req);
+    } catch (error) {
+      return {
+        model: "UNKNOWN",
+        model_version: "UNKNOWN",
+        entity_ids: [req.record_a_id, req.record_b_id],
+        score: 0,
+        status: "MODEL_UNAVAILABLE",
+        signals: {
+          name_similarity: req.name_sim,
+          address_similarity: req.address_sim,
+          phone_match: req.phone_match,
+          vehicle_match: req.vehicle_match,
+        },
+      };
+    }
   }
 
   /**
@@ -67,7 +83,22 @@ export class MLClient {
    */
   async predictAnomaly(req: AnomalyRequest): Promise<AnomalyResponse> {
     const url = `${this.baseUrl}/predict/anomaly`;
-    return this.postJson<AnomalyRequest, AnomalyResponse>(url, req);
+    try {
+      return await this.postJson<AnomalyRequest, AnomalyResponse>(url, req);
+    } catch (error) {
+      return {
+        model: "UNKNOWN",
+        model_version: "UNKNOWN",
+        entity_id: req.entity_id,
+        score: 0,
+        status: "MODEL_UNAVAILABLE",
+        signals: {
+          communication_spike: false,
+          transaction_spike: false,
+          location_change: false,
+        },
+      };
+    }
   }
 
   private async postJson<TIn, TOut>(url: string, payload: TIn): Promise<TOut> {

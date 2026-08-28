@@ -1,22 +1,22 @@
 /**
- * GT-05 Community Detection
- * Implements Connected-component based structural clustering.
- * This is an MVP approximation of Louvain/Leiden modularity algorithms.
+ * GT-05 Structural Connected-Component Cluster Detection
+ * Detects strictly structural connected components.
+ * Note: Does not use Louvain/Leiden terminology to avoid false claims of advanced modularity.
  * Resolves undirected connected components using BFS/DFS.
  */
 
 import { ENTITY_v1, REL_v1 } from "../../contracts/types.js";
 
-export interface CommunityResult {
-  communities: Map<number, string[]>; // Community ID -> Array of Node IDs
-  nodeCommunityMap: Map<string, number>; // Node ID -> Community ID
+export interface ClusterResult {
+  clusters: Map<number, string[]>; // Cluster ID -> Array of Node IDs
+  nodeClusterMap: Map<string, number>; // Node ID -> Cluster ID
 }
 
-export class CommunityDetector {
+export class ClusterDetector {
   /**
-   * Detects communities using Connected Components algorithm.
+   * Detects clusters using Connected Components algorithm.
    */
-  public detectCommunities(nodes: ENTITY_v1[], edges: REL_v1[]): CommunityResult {
+  public detectClusters(nodes: ENTITY_v1[], edges: REL_v1[]): ClusterResult {
     const adj = new Map<string, string[]>();
     nodes.forEach((n) => adj.set(n.id, []));
 
@@ -28,20 +28,20 @@ export class CommunityDetector {
     }
 
     const visited = new Set<string>();
-    const communities = new Map<number, string[]>();
-    const nodeCommunityMap = new Map<string, number>();
-    let communityId = 0;
+    const clusters = new Map<number, string[]>();
+    const nodeClusterMap = new Map<string, number>();
+    let clusterId = 0;
 
     for (const node of nodes) {
       if (!visited.has(node.id)) {
-        const communityNodes: string[] = [];
+        const clusterNodes: string[] = [];
         const queue: string[] = [node.id];
         visited.add(node.id);
 
         while (queue.length > 0) {
           const curr = queue.shift()!;
-          communityNodes.push(curr);
-          nodeCommunityMap.set(curr, communityId);
+          clusterNodes.push(curr);
+          nodeClusterMap.set(curr, clusterId);
 
           const neighbors = adj.get(curr) || [];
           for (const neighbor of neighbors) {
@@ -52,11 +52,11 @@ export class CommunityDetector {
           }
         }
 
-        communities.set(communityId, communityNodes);
-        communityId++;
+        clusters.set(clusterId, clusterNodes);
+        clusterId++;
       }
     }
 
-    return { communities, nodeCommunityMap };
+    return { clusters, nodeClusterMap };
   }
 }

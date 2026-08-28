@@ -9,6 +9,36 @@ import { ENTITY_v1, REL_v1, GRAPH_v1, AuthContext } from "../contracts/types.js"
 import { GraphRepository } from "./repository.js";
 import { FocusedSubgraphOptions } from "./focused_subgraph.js";
 
+const ALLOWED_RELATIONSHIP_TYPES = new Set([
+  "CALLED",
+  "TRANSFERRED_MONEY",
+  "USED",
+  "OWNED",
+  "VISITED",
+  "MET_AT",
+  "TRAVELED_WITH",
+  "LINKED_TO",
+  "ASSOCIATED_WITH",
+  "PART_OF_CASE"
+]);
+
+function validateRelTypes(types?: string[]) {
+  if (!types) return;
+  for (const t of types) {
+    if (!ALLOWED_RELATIONSHIP_TYPES.has(t)) {
+      throw new Error(`Invalid relationship type: ${t}`);
+    }
+  }
+}
+
+function validateBounds(value: any, name: string): number {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0 || !Number.isFinite(num)) {
+    throw new Error(`Invalid value for ${name}: must be a positive finite integer.`);
+  }
+  return num;
+}
+
 export class Neo4jGraphRepository implements GraphRepository {
   private driver: Driver | null = null;
 
@@ -71,6 +101,7 @@ export class Neo4jGraphRepository implements GraphRepository {
 
   public async addRelationship(rel: REL_v1, auth?: AuthContext): Promise<void> {
     this.checkAuthContext(rel.case_id, auth);
+    validateRelTypes([rel.type]);
 
     // Issue 4: Validation happens implicitly in Cypher by matching case_id on source/target
     const props = {
@@ -104,8 +135,15 @@ export class Neo4jGraphRepository implements GraphRepository {
   }
 
   public async getEntity(id: string, auth?: AuthContext): Promise<ENTITY_v1 | undefined> {
-    const query = `MATCH (n {id: $id}) RETURN n`;
-    const records = await this.executeCypher(query, { id });
+    const caseFilter = auth && auth.allowed_case_ids.length > 0
+      ? `AND n.case_id IN $allowedCases`
+      : ``;
+
+    const query = `MATCH (n) WHERE n.id = $id ${caseFilter} RETURN n`;
+    const records = await this.executeCypher(query, { 
+      id, 
+      allowedCases: auth?.allowed_case_ids || [] 
+    });
     if (records.length === 0) return undefined;
 
     const node = records[0].get("n").properties;
@@ -115,16 +153,19 @@ export class Neo4jGraphRepository implements GraphRepository {
       type: labels[0] || "Unknown",
     };
 
-    if (!entity.case_id) {
-      throw new Error(`Retrieved entity is missing case_id: ${entity.id}`);
-    }
-    this.checkAuthContext(entity.case_id, auth);
     return entity;
   }
 
   public async getRelationship(id: string, auth?: AuthContext): Promise<REL_v1 | undefined> {
-    const query = `MATCH ()-[r {id: $id}]->() RETURN r, startNode(r).id as source, endNode(r).id as target, type(r) as type`;
-    const records = await this.executeCypher(query, { id });
+    const caseFilter = auth && auth.allowed_case_ids.length > 0
+      ? `AND r.case_id IN $allowedCases`
+      : ``;
+
+    const query = `MATCH ()-[r]->() WHERE r.id = $id ${caseFilter} RETURN r, startNode(r).id as source, endNode(r).id as target, type(r) as type`;
+    const records = await this.executeCypher(query, { 
+      id,
+      allowedCases: auth?.allowed_case_ids || [] 
+    });
     if (records.length === 0) return undefined;
 
     const relProps = records[0].get("r").properties;
@@ -135,7 +176,6 @@ export class Neo4jGraphRepository implements GraphRepository {
       type: records[0].get("type"),
     };
 
-    this.checkAuthContext(rel.case_id, auth);
     return rel;
   }
 
@@ -161,24 +201,79 @@ export class Neo4jGraphRepository implements GraphRepository {
 
   public async getCaseGraph(caseId: string, auth?: AuthContext, maxNodes: number = 1000): Promise<GRAPH_v1> {
     this.checkAuthContext(caseId, auth);
-    // Simple extraction of the entire case bounded by maxNodes
+    validateBounds(maxNodes, "maxNodes");
+    
     const query = `
-      MATCH (n {case_id: $caseId})
-      WITH n LIMIT toInteger($maxNodes)
-      OPTIONAL MATCH (n)-[r {case_id: $caseId}]-(m {case_id: $caseId})
-      WHERE m IN collect(n)
-      RETURN collect(DISTINCT n) as nodes, collect(DISTINCT r) as edges
+      MATCH (n)
+      WHERE n.case_id = $caseId
+      WITH collect(n) AS allNodes
+      WITH allNodes[0..toInteger($maxNodes)] AS selectedNodes, size(allNodes) > toInteger($maxNodes) AS truncated
+      UNWIND selectedNodes AS n
+      OPTIONAL MATCH (n)-[r]-(m)
+      WHERE m IN selectedNodes AND r.case_id = $caseId
+      RETURN 
+        collect(DISTINCT n) AS nodes, 
+        collect(DISTINCT r) AS edges,
+        collect(DISTINCT [r, startNode(r).id, endNode(r).id, type(r)]) AS edgeDetails,
+        truncated
     `;
     const records = await this.executeCypher(query, { caseId, maxNodes });
     const nodes = records[0]?.get("nodes")?.map((n: any) => ({ ...n.properties, type: n.labels?.[0] || "Unknown" })) || [];
-    const edges = records[0]?.get("edges")?.filter(Boolean).map((r: any) => ({ ...r.properties, source: r.start.properties.id, target: r.end.properties.id, type: r.type })) || [];
+    
+    const edgeDetails = records[0]?.get("edgeDetails") || [];
+    const edges = edgeDetails.filter((ed: any) => ed[0] !== null).map((ed: any) => ({
+      ...ed[0].properties,
+      source: ed[1],
+      target: ed[2],
+      type: ed[3]
+    }));
+    
+    const truncated = records[0]?.get("truncated") || false;
+
+    return {
+      case_id: caseId,
+      nodes,
+      edges,
+      meta: {
+        truncated,
+        node_count: nodes.length,
+        edge_count: edges.length,
+      }
+    };
+  }
+
+  public async getAuthorizedAnalyticsGraph(caseId: string, auth?: AuthContext): Promise<GRAPH_v1> {
+    this.checkAuthContext(caseId, auth);
+    
+    const query = `
+      MATCH (n)
+      WHERE n.case_id = $caseId
+      WITH collect(n) AS allNodes
+      UNWIND allNodes AS n
+      OPTIONAL MATCH (n)-[r]-(m)
+      WHERE m IN allNodes AND r.case_id = $caseId
+      RETURN 
+        collect(DISTINCT n) AS nodes, 
+        collect(DISTINCT r) AS edges,
+        collect(DISTINCT [r, startNode(r).id, endNode(r).id, type(r)]) AS edgeDetails
+    `;
+    const records = await this.executeCypher(query, { caseId });
+    const nodes = records[0]?.get("nodes")?.map((n: any) => ({ ...n.properties, type: n.labels?.[0] || "Unknown" })) || [];
+    
+    const edgeDetails = records[0]?.get("edgeDetails") || [];
+    const edges = edgeDetails.filter((ed: any) => ed[0] !== null).map((ed: any) => ({
+      ...ed[0].properties,
+      source: ed[1],
+      target: ed[2],
+      type: ed[3]
+    }));
     
     return {
       case_id: caseId,
       nodes,
       edges,
       meta: {
-        truncated: nodes.length >= maxNodes,
+        truncated: false,
         node_count: nodes.length,
         edge_count: edges.length,
       }
@@ -189,61 +284,82 @@ export class Neo4jGraphRepository implements GraphRepository {
     this.checkAuthContext(options.case_id, auth);
     const { case_id, seed_ids, max_hops = 2, time_start, time_end, rel_types, max_nodes = 100 } = options;
     
+    validateBounds(max_hops, "max_hops");
+    validateBounds(max_nodes, "max_nodes");
+    validateRelTypes(rel_types);
+
     let relFilter = "";
     if (rel_types && rel_types.length > 0) {
       relFilter = ":" + rel_types.join("|");
     }
 
-    let timeFilter = "";
+    let timeCondition = "TRUE";
     if (time_start && time_end) {
-      timeFilter = `AND (
+      timeCondition = `(
         (r.event_time IS NOT NULL AND r.event_time >= $time_start AND r.event_time <= $time_end) OR
         (r.effective_start IS NOT NULL AND (r.effective_end IS NULL OR r.effective_end >= $time_start) AND r.effective_start <= $time_end)
       )`;
     } else if (time_start) {
-      timeFilter = `AND (
+      timeCondition = `(
         (r.event_time IS NOT NULL AND r.event_time >= $time_start) OR
         (r.effective_start IS NOT NULL AND (r.effective_end IS NULL OR r.effective_end >= $time_start))
       )`;
     } else if (time_end) {
-      timeFilter = `AND (
+      timeCondition = `(
         (r.event_time IS NOT NULL AND r.event_time <= $time_end) OR
         (r.effective_start IS NOT NULL AND r.effective_start <= $time_end)
       )`;
     }
 
-    // Parameterized Cypher for focused subgraph using apoc.path.subgraphAll or variable length paths
-    // Using basic variable length paths to avoid APOC dependency if missing
     const query = `
-      MATCH path = (seed {case_id: $case_id})-[r${relFilter}*0..${max_hops}]-(target {case_id: $case_id})
-      WHERE seed.id IN $seed_ids ${timeFilter}
-      WITH collect(DISTINCT target) as allNodes, collect(DISTINCT last(relationships(path))) as allEdges
-      WITH allNodes[0..$max_nodes] as selectedNodes, allEdges
+      MATCH p = (seed)-[*0..${max_hops}]-(target)
+      WHERE seed.id IN $seed_ids AND seed.case_id = $case_id AND target.case_id = $case_id
       
-      UNWIND selectedNodes as n
-      OPTIONAL MATCH (n)-[rel${relFilter}]-(m)
-      WHERE m IN selectedNodes AND rel IN allEdges
-      RETURN collect(DISTINCT n) as nodes, collect(DISTINCT rel) as edges
+      WITH target, relationships(p) as rels
+      WHERE ALL(r IN rels WHERE r.case_id = $case_id AND ${timeCondition} ${
+        rel_types && rel_types.length > 0 ? "AND type(r) IN $rel_types" : ""
+      })
+      
+      WITH collect(DISTINCT target) as allNodes, collect(DISTINCT rels) as allPaths
+      WITH allNodes[0..toInteger($max_nodes)] as selectedNodes, allPaths, size(allNodes) > toInteger($max_nodes) AS truncated
+      
+      UNWIND allPaths AS pathRels
+      UNWIND pathRels AS r
+      WITH selectedNodes, truncated, r
+      WHERE startNode(r) IN selectedNodes AND endNode(r) IN selectedNodes
+      
+      RETURN 
+        selectedNodes as nodes, 
+        collect(DISTINCT r) as edges,
+        collect(DISTINCT [r, startNode(r).id, endNode(r).id, type(r)]) AS edgeDetails,
+        truncated
     `;
 
     const records = await this.executeCypher(query, {
       case_id,
       seed_ids,
-      max_hops,
       time_start,
       time_end,
-      max_nodes
+      rel_types: rel_types || []
     });
 
     const nodes = records[0]?.get("nodes")?.map((n: any) => ({ ...n.properties, type: n.labels?.[0] || "Unknown" })) || [];
-    const edges = records[0]?.get("edges")?.filter(Boolean).map((r: any) => ({ ...r.properties, source: r.start.properties.id, target: r.end.properties.id, type: r.type })) || [];
+    const edgeDetails = records[0]?.get("edgeDetails") || [];
+    const edges = edgeDetails.filter((ed: any) => ed[0] !== null).map((ed: any) => ({
+      ...ed[0].properties,
+      source: ed[1],
+      target: ed[2],
+      type: ed[3]
+    }));
+
+    const truncated = records[0]?.get("truncated") || false;
 
     return {
       case_id: case_id,
       nodes,
       edges,
       meta: {
-        truncated: nodes.length >= max_nodes,
+        truncated,
         node_count: nodes.length,
         edge_count: edges.length,
       }

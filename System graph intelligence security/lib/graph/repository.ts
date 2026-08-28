@@ -9,6 +9,7 @@ export interface GraphRepository {
   getAllEntitiesForCase(caseId: string, auth?: AuthContext): Promise<ENTITY_v1[]>;
   getAllRelationshipsForCase(caseId: string, auth?: AuthContext): Promise<REL_v1[]>;
   getCaseGraph(caseId: string, auth?: AuthContext, maxNodes?: number): Promise<GRAPH_v1>;
+  getAuthorizedAnalyticsGraph(caseId: string, auth?: AuthContext): Promise<GRAPH_v1>;
   getFocusedSubgraph(options: FocusedSubgraphOptions, auth?: AuthContext): Promise<GRAPH_v1>;
   clear(): Promise<void>;
 }

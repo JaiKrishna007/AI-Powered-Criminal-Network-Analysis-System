@@ -23,10 +23,15 @@ export class GraphStore {
   constructor(auditLogger?: AuditLogger, neo4jService?: Neo4jGraphRepository, forceInMemory: boolean = false) {
     const logger = auditLogger || new AuditLogger();
     
-    // Default to Neo4j if provided and connected, otherwise InMemory
-    if (!forceInMemory && neo4jService && neo4jService.isConnected()) {
-      this.repository = neo4jService;
-      this.neo4jActive = true;
+    const backend = process.env.GRAPH_BACKEND || (forceInMemory ? "memory" : "neo4j");
+
+    if (backend === "neo4j") {
+      if (neo4jService && neo4jService.isConnected()) {
+        this.repository = neo4jService;
+        this.neo4jActive = true;
+      } else {
+        throw new Error("DATABASE_UNAVAILABLE: Neo4j is configured as the backend but is not connected.");
+      }
     } else {
       this.repository = new InMemoryGraphRepository(logger);
       this.neo4jActive = false;
@@ -67,6 +72,10 @@ export class GraphStore {
     maxNodes: number = 1000
   ): Promise<GRAPH_v1> {
     return this.repository.getCaseGraph(caseId, auth, maxNodes);
+  }
+
+  public async getAuthorizedAnalyticsGraph(caseId: string, auth?: AuthContext): Promise<GRAPH_v1> {
+    return this.repository.getAuthorizedAnalyticsGraph(caseId, auth);
   }
 
   public async extractFocusedSubgraph(options: FocusedSubgraphOptions, auth?: AuthContext): Promise<GRAPH_v1> {

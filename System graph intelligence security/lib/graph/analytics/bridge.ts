@@ -9,11 +9,18 @@
  */
 
 import { ENTITY_v1, REL_v1, INSIGHT_v1 } from "../../contracts/types.js";
-import { CommunityDetector } from "./community.js";
+import { ClusterDetector } from "./cluster.js";
 import { CentralityAnalyzer } from "./centrality.js";
 
+// Helper to get centralized temporal date (P2-4)
+function getEdgeEffectiveTime(e: any): number | undefined {
+  const startStr = e.event_time || e.effective_start || e.valid_from || (e.properties && (e.properties.effective_start || e.properties.valid_from));
+  if (startStr) return new Date(startStr).getTime();
+  return undefined;
+}
+
 export class BridgeDetector {
-  private communityDetector = new CommunityDetector();
+  private clusterDetector = new ClusterDetector();
   private centralityAnalyzer = new CentralityAnalyzer();
 
   /**
@@ -30,12 +37,11 @@ export class BridgeDetector {
 
     const articulationPoints = this.centralityAnalyzer.findArticulationPoints(nodes, edges);
     const centralityMap = this.centralityAnalyzer.calculateBetweennessCentrality(nodes, edges);
-    const baseCommunities = this.communityDetector.detectCommunities(nodes, edges);
-    const communityMap = new Map<string, number>(); // Node ID -> Community ID (Component ID)
+    const baseClusters = this.clusterDetector.detectClusters(nodes, edges);
+    const clusterMap = new Map<string, number>(); // Node ID -> Cluster ID
     
-    // Build quick lookup for community IDs
-    for (const [nodeId, commId] of baseCommunities.nodeCommunityMap.entries()) {
-      communityMap.set(nodeId, commId);
+    for (const [nodeId, clusterId] of baseClusters.nodeClusterMap.entries()) {
+      clusterMap.set(nodeId, clusterId);
     }
 
     const maxCentrality = Math.max(...Array.from(centralityMap.values()), 1);
@@ -45,7 +51,7 @@ export class BridgeDetector {
       scoreDetails: {
         normalizedBetweenness: number;
         articulationSignal: number;
-        crossCommunityDegree: number;
+        crossClusterConnectivity: number;
         evidenceDensity: number;
         temporalRelevance: number;
       };
@@ -67,32 +73,23 @@ export class BridgeDetector {
       const isCutVertex = articulationPoints.has(node.id);
       const articulationSignal = isCutVertex ? 1.0 : 0.0;
 
-      // 3. Cross-Community Degree (Connections to distinct communities)
-      // A node bridging different connected components (or sub-components) is strong
-      const connectedCommunities = new Set<string>();
-      for (const edge of connectedEdges) {
-        const neighborId = edge.source === node.id ? edge.target : edge.source;
-        // In simple connected-components, all connected nodes are in the same community.
-        // But removing the candidate node splits it. 
-        // We evaluate articulation by removing this node.
-      }
+      // 3. Cross-Cluster Connectivity
+      // A node bridging different connected components is strong
+      const connectedClusters = new Set<string>();
 
-      // To evaluate cross-community correctly, we remove the candidate and check components.
       const subNodes = nodes.filter((n) => n.id !== node.id);
       const subEdges = edges.filter((e) => e.source !== node.id && e.target !== node.id);
-      const subCommunityResult = this.communityDetector.detectCommunities(subNodes, subEdges);
-      const subCommunities = Array.from(subCommunityResult.communities.values());
+      const subClusterResult = this.clusterDetector.detectClusters(subNodes, subEdges);
+      const subClusters = Array.from(subClusterResult.clusters.values());
       
-      const validSubCommunities = subCommunities.filter((communityNodes) => {
-        return communityNodes.length >= 2; // Ignoring isolated single nodes
+      const validSubClusters = subClusters.filter((clusterNodes) => {
+        return clusterNodes.length >= 2; 
       });
       
-      // Cross-community degree approximation
-      const crossCommunityDegree = Math.min(validSubCommunities.length, 5) / 5.0;
+      const crossClusterConnectivity = Math.min(validSubClusters.length, 5) / 5.0;
 
-      // Only consider nodes that either split communities or have high centrality
-      if (!isCutVertex && rawCentrality === 0 && validSubCommunities.length <= 1) {
-        continue; // Not a meaningful bridge
+      if (!isCutVertex && rawCentrality === 0 && validSubClusters.length <= 1) {
+        continue; 
       }
 
       // 4. Evidence Density
@@ -102,26 +99,25 @@ export class BridgeDetector {
       // 5. Temporal Relevance (Recent activity gets higher score)
       let maxTemporalScore = 0;
       for (const e of connectedEdges) {
-        if (e.event_time) {
-          const edgeTime = new Date(e.event_time).getTime();
+        const edgeTime = getEdgeEffectiveTime(e);
+        if (edgeTime !== undefined) {
           const daysOld = Math.max(0, (nowTime - edgeTime) / (1000 * 3600 * 24));
-          const temporalScore = Math.max(0, 1.0 - (daysOld / 365)); // 1.0 if today, 0 if > 1 year
+          const temporalScore = Math.max(0, 1.0 - (daysOld / 365)); 
           if (temporalScore > maxTemporalScore) maxTemporalScore = temporalScore;
         }
       }
       const temporalRelevance = maxTemporalScore;
 
-      // Calculate Weighted Bridge Score (Configurable weights)
       const w1 = 0.3; // betweenness
       const w2 = 0.3; // articulation
-      const w3 = 0.2; // cross-community
+      const w3 = 0.2; // cross-cluster
       const w4 = 0.1; // evidence density
       const w5 = 0.1; // temporal relevance
 
       const bridgeScore = 
         (w1 * normalizedBetweenness) + 
         (w2 * articulationSignal) + 
-        (w3 * crossCommunityDegree) + 
+        (w3 * crossClusterConnectivity) + 
         (w4 * evidenceDensity) + 
         (w5 * temporalRelevance);
 
@@ -131,7 +127,7 @@ export class BridgeDetector {
           scoreDetails: {
             normalizedBetweenness,
             articulationSignal,
-            crossCommunityDegree,
+            crossClusterConnectivity,
             evidenceDensity,
             temporalRelevance
           },
@@ -167,8 +163,8 @@ export class BridgeDetector {
         id: `bridge_${candidate.id}_${Date.now()}`,
         case_id: caseId,
         type: "POTENTIAL_BRIDGE",
-        title: `Potential Bridge Candidate Identified: ${candidate.id}`,
-        description: `Entity ${candidate.id} (${candidateNode.type}) acts as a structural connector bridging distinct communities. Score: ${candidate.bridgeScore.toFixed(3)}.`,
+        title: `Potential Structural Bridge Identified: ${candidate.id}`,
+        description: `Entity ${candidate.id} (${candidateNode.type}) acts as a structural connector bridging distinct clusters. Score: ${candidate.bridgeScore.toFixed(3)}.`,
         target_entity_ids: [candidate.id],
         evidence_ids: evidenceIds,
         timestamp: new Date().toISOString(),

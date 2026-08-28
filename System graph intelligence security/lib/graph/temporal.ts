@@ -15,6 +15,25 @@ export interface TemporalDiffResult {
   unknown_timestamps_count: number;
 }
 
+export function getCanonicalEdgeHash(e: REL_v1): string {
+  // Extract meaningful fields, ignoring ephemeral or unordred metadata
+  const canonical = {
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    type: e.type,
+    case_id: e.case_id,
+    event_time: e.event_time,
+    valid_from: e.valid_from,
+    valid_to: e.valid_to,
+    effective_start: e.effective_start,
+    effective_end: e.effective_end,
+    evidence_ids: [...(e.evidence_ids || [])].sort(),
+    properties: e.properties ? Object.fromEntries(Object.entries(e.properties).sort()) : {}
+  };
+  return JSON.stringify(canonical);
+}
+
 export interface IncidentWindowOptions {
   case_id: string;
   anchor_time: string; // ISO-8601 UTC
@@ -38,9 +57,9 @@ export class TemporalEngine {
    * and end is undefined or >= T).
    * Relationships without timestamps are classified as UNKNOWN and excluded from strict time snapshot.
    */
-  public async getSnapshotAt(caseId: string, timestamp: string): Promise<GRAPH_v1> {
-    const caseNodes = await this.store.getAllEntitiesForCase(caseId);
-    const caseEdges = await this.store.getAllRelationshipsForCase(caseId);
+  public async getSnapshotAt(caseId: string, timestamp: string, auth?: any): Promise<GRAPH_v1> {
+    const caseNodes = await this.store.getAllEntitiesForCase(caseId, auth);
+    const caseEdges = await this.store.getAllRelationshipsForCase(caseId, auth);
 
     const activeEdges = caseEdges.filter((e) => {
       const start = this.getEdgeStart(e);
@@ -88,10 +107,11 @@ export class TemporalEngine {
   public async compareSnapshots(
     caseId: string,
     time1: string,
-    time2: string
+    time2: string,
+    auth?: any
   ): Promise<TemporalDiffResult> {
-    const snap1 = await this.getSnapshotAt(caseId, time1);
-    const snap2 = await this.getSnapshotAt(caseId, time2);
+    const snap1 = await this.getSnapshotAt(caseId, time1, auth);
+    const snap2 = await this.getSnapshotAt(caseId, time2, auth);
 
     const map1 = new Map(snap1.edges.map((e) => [e.id, e]));
     const map2 = new Map(snap2.edges.map((e) => [e.id, e]));
@@ -106,7 +126,7 @@ export class TemporalEngine {
         added.push(edge2);
       } else {
         const edge1 = map1.get(id)!;
-        if (JSON.stringify(edge1) !== JSON.stringify(edge2)) {
+        if (getCanonicalEdgeHash(edge1) !== getCanonicalEdgeHash(edge2)) {
           changed.push({ before: edge1, after: edge2 });
         }
       }
@@ -119,7 +139,7 @@ export class TemporalEngine {
       }
     }
 
-    const allEdges = await this.store.getAllRelationshipsForCase(caseId);
+    const allEdges = await this.store.getAllRelationshipsForCase(caseId, auth);
     const unknownCount = allEdges.filter(
       (e) => !this.getEdgeStart(e) && !this.getEdgeEnd(e)
     ).length;
@@ -135,21 +155,24 @@ export class TemporalEngine {
   /**
    * Filter relationships within [T - before, T + after] incident window.
    */
-  public async getIncidentWindowGraph(options: IncidentWindowOptions): Promise<GRAPH_v1> {
+  public async getIncidentWindowGraph(options: IncidentWindowOptions, auth?: any): Promise<GRAPH_v1> {
     const { case_id, anchor_time, before_ms, after_ms } = options;
 
     const anchorMs = new Date(anchor_time).getTime();
     const windowStartMs = anchorMs - before_ms;
     const windowEndMs = anchorMs + after_ms;
 
-    const caseNodes = await this.store.getAllEntitiesForCase(case_id);
-    const caseEdges = await this.store.getAllRelationshipsForCase(case_id);
+    const caseNodes = await this.store.getAllEntitiesForCase(case_id, auth);
+    const caseEdges = await this.store.getAllRelationshipsForCase(case_id, auth);
 
     const windowEdges = caseEdges.filter((e) => {
       const startStr = this.getEdgeStart(e);
       if (!startStr) return false;
       const startMs = new Date(startStr).getTime();
-      return startMs >= windowStartMs && startMs <= windowEndMs;
+      const endStr = this.getEdgeEnd(e);
+      const endMs = endStr ? new Date(endStr).getTime() : undefined;
+      
+      return startMs <= windowEndMs && (endMs === undefined || endMs >= windowStartMs);
     });
 
     const windowNodeIds = new Set<string>();

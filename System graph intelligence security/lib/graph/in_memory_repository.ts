@@ -52,6 +52,16 @@ export class InMemoryGraphRepository implements GraphRepository {
     if (!rel.case_id) {
       throw new Error(`Cannot add relationship without case_id: ${rel.id}`);
     }
+
+    const ALLOWED_RELATIONSHIP_TYPES = new Set([
+      "CALLED", "TRANSFERRED_MONEY", "USED", "OWNED", "VISITED", 
+      "MET_AT", "TRAVELED_WITH", "LINKED_TO", "ASSOCIATED_WITH", "PART_OF_CASE"
+    ]);
+
+    if (!ALLOWED_RELATIONSHIP_TYPES.has(rel.type)) {
+      throw new Error(`Invalid relationship type: ${rel.type}`);
+    }
+
     if (auth && !auth.allowed_case_ids.includes(rel.case_id)) {
       await this.auditLogger.log(
         auth.actor_id,
@@ -199,6 +209,34 @@ export class InMemoryGraphRepository implements GraphRepository {
       meta: {
         truncated,
         node_count: slicedNodes.length,
+        edge_count: caseEdges.length,
+      },
+    };
+  }
+
+  public async getAuthorizedAnalyticsGraph(caseId: string, auth?: AuthContext): Promise<GRAPH_v1> {
+    const caseNodes = await this.getAllEntitiesForCase(caseId, auth);
+    const caseEdges = await this.getAllRelationshipsForCase(caseId, auth);
+
+    if (auth) {
+      await this.auditLogger.log(
+        auth.actor_id,
+        "GET_ANALYTICS_GRAPH",
+        "GRAPH",
+        caseId,
+        "SUCCESS",
+        auth.correlation_id,
+        { node_count: caseNodes.length, edge_count: caseEdges.length }
+      );
+    }
+
+    return {
+      case_id: caseId,
+      nodes: caseNodes,
+      edges: caseEdges,
+      meta: {
+        truncated: false,
+        node_count: caseNodes.length,
         edge_count: caseEdges.length,
       },
     };
