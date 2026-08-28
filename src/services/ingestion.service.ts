@@ -6,6 +6,8 @@ import { ExtractionService } from './extraction.service';
 import { EntityResolutionService } from './entity_resolution.service';
 import { EvidenceService } from './evidence.service';
 
+import { MAX_EVIDENCE_SIZE_BYTES, MAX_EVIDENCE_SIZE_MB } from '../config/paths';
+
 export interface IngestionResult {
   job: IngestionJob;
   evidence?: Evidence;
@@ -14,7 +16,7 @@ export interface IngestionResult {
 }
 
 export class IngestionService {
-  public static readonly MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+  public static readonly MAX_FILE_SIZE_BYTES = MAX_EVIDENCE_SIZE_BYTES;
 
   public static async processIngestion(payload: IngestRequestPayload): Promise<IngestionResult> {
     // 1. Validate type
@@ -27,7 +29,7 @@ export class IngestionService {
     // 2. Validate size
     const contentBuffer = typeof payload.content === 'string' ? Buffer.from(payload.content) : payload.content;
     if (contentBuffer.length > this.MAX_FILE_SIZE_BYTES) {
-      throw { code: 'FILE_TOO_LARGE', message: 'Payload size exceeds 50MB limit' };
+      throw { code: 'FILE_TOO_LARGE', message: `Payload size exceeds ${MAX_EVIDENCE_SIZE_MB}MB limit` };
     }
 
     // 3. Validate structure (Check CSV / JSON malformed structure)
@@ -44,14 +46,17 @@ export class IngestionService {
       }
     }
 
-    // 4. Generate Job ID and EVD ID first
+    // 4. Normalize source_ref preserving original (Issue 34)
+    const normSourceRef = NormalizationService.normalizeSourceRef(payload.source_ref);
+
+    // 5. Generate Job ID and EVD ID first
     const jobId = `JOB-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const evidenceId = `EVD-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     let job: IngestionJob = {
       id: jobId,
       case_id: payload.case_id,
-      source_ref: payload.source_ref,
+      source_ref: normSourceRef.original,
       state: 'QUEUED',
       error: null
     };

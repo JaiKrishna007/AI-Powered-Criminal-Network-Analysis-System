@@ -3,6 +3,9 @@ import { AuthMiddleware, AuthenticatedRequest } from '../middleware/auth';
 import { AuditMiddleware } from '../middleware/audit';
 import { EvidenceService } from '../services/evidence.service';
 import { db } from '../db';
+import fs from 'fs';
+import path from 'path';
+import { EVIDENCE_DIR } from '../config/paths';
 
 const router = Router();
 
@@ -77,17 +80,19 @@ router.get('/:id/download', AuditMiddleware.auditEvent('EVIDENCE_EXPORT'), async
     return res.status(400).json({ error: 'INVALID_STORAGE', message: 'Download only supports local storage in this prototype' });
   }
 
-  const { EVIDENCE_DIR } = require('../config/paths');
-  const path = require('path');
-  const fs = require('fs');
-  const fileName = evidence.storage_uri.replace('local://', '');
-  const filePath = path.join(EVIDENCE_DIR, fileName);
+  const baseDir = path.resolve(EVIDENCE_DIR);
+  const storageKey = evidence.storage_uri.replace('local://', '');
+  const filePath = path.resolve(baseDir, storageKey);
+
+  if (!filePath.startsWith(baseDir + path.sep) && filePath !== baseDir) {
+    return res.status(400).json({ error: 'INVALID_STORAGE_PATH', message: 'Path traversal detected' });
+  }
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Artifact file missing' });
   }
 
-  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${path.basename(storageKey)}"`);
   res.sendFile(filePath);
 });
 

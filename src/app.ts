@@ -11,6 +11,7 @@ import evidenceRoutes from './routes/evidence.routes';
 import { AuditMiddleware } from './middleware/audit';
 import { AuthMiddleware, AuthenticatedRequest } from './middleware/auth';
 import { db } from './db';
+import { MAX_EVIDENCE_SIZE_MB } from './config/paths';
 
 const app = express();
 
@@ -18,7 +19,7 @@ const app = express();
 app.use(AuditMiddleware.correlationId);
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: `${MAX_EVIDENCE_SIZE_MB}mb` }));
 
 // Validate session secret in production (Issue 34)
 if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {

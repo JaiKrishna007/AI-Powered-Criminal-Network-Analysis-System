@@ -63,8 +63,13 @@ router.get('/:id/export', AuditMiddleware.auditEvent('REPORT_EXPORT'), async (re
     return res.status(400).json({ error: 'NOT_READY', message: 'Report is still generating' });
   }
 
-  const fileName = report.storage_uri.replace('local://', '');
-  const filePath = path.resolve(REPORTS_DIR, fileName);
+  const baseDir = path.resolve(REPORTS_DIR);
+  const fileName = path.basename(report.storage_uri.replace('local://', ''));
+  const filePath = path.resolve(baseDir, fileName);
+
+  if (!filePath.startsWith(baseDir + path.sep) && filePath !== baseDir) {
+    return res.status(400).json({ error: 'INVALID_STORAGE_PATH', message: 'Path traversal detected' });
+  }
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'NOT_FOUND', message: 'PDF file missing on disk' });

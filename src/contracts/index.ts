@@ -129,6 +129,7 @@ export type UserV1 = z.infer<typeof UserSchema>;
 export const CaseSchema = z.object({
   id: CaseIdSchema,
   title: z.string(),
+  description: z.string().optional(),
   status: z.string(),
   owner_id: UserIdSchema,
   classification: ClassificationSchema

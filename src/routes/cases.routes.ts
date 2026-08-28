@@ -28,14 +28,18 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
  * Create Case
  */
 router.post('/', AuditMiddleware.auditEvent('CASE_CREATE'), async (req: AuthenticatedRequest, res: Response) => {
-  const { id, title, status, classification } = req.body;
-  if (!id || !title) {
-    return res.status(400).json({ error: 'MISSING_FIELDS', message: 'id and title are required' });
+  const { id, title, status, classification, description } = req.body;
+  if (!title) {
+    return res.status(400).json({ error: 'MISSING_FIELDS', message: 'title is required' });
   }
 
+  const caseId = id || `CASE-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  (req as any).case_id = caseId;
+
   const caseObj: Case = {
-    id,
+    id: caseId,
     title,
+    description,
     status: status || 'ACTIVE',
     owner_id: req.user!.id,
     classification: classification || 'UNCLASSIFIED'

@@ -29,7 +29,7 @@ export class AuditMiddleware {
       res.on('finish', async () => {
         const authReq = req as AuthenticatedRequest;
         const actorId = authReq.user?.id || 'ANONYMOUS';
-        const caseId = req.params.case_id || req.body.case_id || null;
+        const caseId = req.params.case_id || req.body.case_id || (req as any).case_id || (req.body && req.body.id ? req.body.id : null);
         
         const eventId = `AUD-${Date.now()}-${uuidv4().substring(0, 8)}`;
         const event: any = {

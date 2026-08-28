@@ -657,6 +657,40 @@ export class ControlPlaneDB {
     });
   }
 
+  public async getAuditEventsByCase(case_id: string): Promise<AuditEventRef[]> {
+    if (this.isTestEnv) {
+      return Array.from(this.testAuditEvents.values()).filter(a => a.case_id === case_id);
+    }
+    const res = await this.getCollection('audit_event_ref').find({ case_id }).toArray();
+    return res.map(row => {
+      const { _id, ...evt } = row;
+      return evt as unknown as AuditEventRef;
+    });
+  }
+
+  public async verifyAuditChainIntegrity(): Promise<{ valid: boolean; brokenAt?: string }> {
+    const events = await this.getAllAuditEvents();
+    let prevHash = 'GENESIS';
+    const crypto = require('crypto');
+    for (const evt of events) {
+      if (evt.previous_hash !== prevHash) {
+        return { valid: false, brokenAt: evt.event_id };
+      }
+      const dataString = JSON.stringify({
+        event_id: evt.event_id,
+        actor_id: evt.actor_id,
+        case_id: evt.case_id,
+        action: evt.action
+      });
+      const computedHash = crypto.createHash('sha256').update(prevHash + dataString).digest('hex');
+      if (evt.hash !== computedHash) {
+        return { valid: false, brokenAt: evt.event_id };
+      }
+      prevHash = evt.hash;
+    }
+    return { valid: true };
+  }
+
   // --- Candidate Storage Resolution for Entity Review ---
   public async saveCandidate(candidate: EntityCandidate): Promise<EntityCandidate> {
     if (this.isTestEnv) {

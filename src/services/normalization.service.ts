@@ -61,4 +61,21 @@ export class NormalizationService {
       normalized: canonical
     };
   }
+
+  /**
+   * Normalizes source references (e.g. FIR-001, fir-001, FIR 001) for consistent reference matching (Issue 34).
+   */
+  public static normalizeSourceRef(originalRef: string): NormalizedField<string> {
+    if (!originalRef || typeof originalRef !== 'string') {
+      return { original: originalRef || '', normalized: '' };
+    }
+
+    const trimmed = originalRef.trim();
+    const canonical = trimmed.toUpperCase().replace(/[\s\-_]+/g, '-');
+
+    return {
+      original: trimmed,
+      normalized: canonical
+    };
+  }
 }
