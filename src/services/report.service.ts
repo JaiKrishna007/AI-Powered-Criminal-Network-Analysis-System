@@ -25,12 +25,23 @@ export class ReportService {
     const fileName = `${reportId}.pdf`;
     const filePath = path.join(REPORTS_DIR, fileName);
 
+    let version = 1;
+    if (params?.base_report_id) {
+      const baseReport = await db.getReport(params.base_report_id);
+      if (baseReport && baseReport.case_id === caseId) {
+        version = (baseReport.version || 1) + 1;
+      }
+    }
+
     // Initial record
     let report: Report = {
       id: reportId,
       case_id: caseId,
       created_by: userId,
       status: 'GENERATING',
+      version,
+      base_report_id: params?.base_report_id,
+      parameters: params,
       created_at: new Date().toISOString()
     };
     report = await db.createReport(report);

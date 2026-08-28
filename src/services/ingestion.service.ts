@@ -44,8 +44,10 @@ export class IngestionService {
       }
     }
 
-    // 4. Create INGEST.v1 job with state QUEUED
+    // 4. Generate Job ID and EVD ID first
     const jobId = `JOB-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const evidenceId = `EVD-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
     let job: IngestionJob = {
       id: jobId,
       case_id: payload.case_id,
@@ -54,39 +56,41 @@ export class IngestionService {
       error: null
     };
     await db.createIngestionJob(job);
-
-    // Update job state to PROCESSING
     await db.updateIngestionJobState(jobId, 'PROCESSING');
 
-    // 5. Store original artifact & Hash BEFORE transformation
-    let storageUri = payload.storage_uri;
-    let sha256Hash = '';
-
-    try {
-      const ext = payload.source_type.toLowerCase();
-      const storeResult = await EvidenceService.storeOriginalEvidence(jobId, contentBuffer, ext);
-      storageUri = storeResult.storage_uri;
-      sha256Hash = storeResult.sha256;
-    } catch (e: any) {
-      throw { code: 'STORAGE_ERROR', message: `Failed to store evidence: ${e.message}` };
-    }
-
-    // 6. Check duplicate source hash (BE-T03)
+    // 5. Compute Hash and Check Duplicates (Issue 25)
+    const sha256Hash = crypto.createHash('sha256').update(contentBuffer).digest('hex');
     const existingEv = await db.findEvidenceBySha256(sha256Hash);
+
+    let storageUri = payload.storage_uri;
+
     if (existingEv) {
-      // Duplicate handling invoked
-      await db.updateIngestionJobState(jobId, 'COMPLETED', 'DUPLICATE_SOURCE_HASH');
-      job = (await db.getIngestionJob(jobId))!;
-      return {
-        job,
-        evidence: existingEv,
-        candidatesExtracted: [],
-        isDuplicate: true
-      };
+      if (existingEv.case_id === payload.case_id) {
+        // Same case duplicate: Duplicate handling invoked
+        await db.updateIngestionJobState(jobId, 'COMPLETED', 'DUPLICATE_SOURCE_HASH');
+        job = (await db.getIngestionJob(jobId))!;
+        return {
+          job,
+          evidence: existingEv,
+          candidatesExtracted: [],
+          isDuplicate: true
+        };
+      } else {
+        // Different case duplicate: Reuse storage reference but create a new Evidence record (Isolation)
+        storageUri = existingEv.storage_uri;
+      }
+    } else {
+      // 6. Store original artifact using EVD ID (Issue 46)
+      try {
+        const ext = payload.source_type.toLowerCase();
+        const storeResult = await EvidenceService.storeOriginalEvidence(evidenceId, contentBuffer, ext);
+        storageUri = storeResult.storage_uri;
+      } catch (e: any) {
+        throw { code: 'STORAGE_ERROR', message: `Failed to store evidence: ${e.message}` };
+      }
     }
 
     // 7. Create evidence record (EVIDENCE.v1)
-    const evidenceId = `EVD-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const evidenceRecord: Evidence = {
       id: evidenceId,
       case_id: payload.case_id,

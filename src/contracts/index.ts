@@ -83,6 +83,9 @@ export const ReportSchema = z.object({
   created_by: UserIdSchema,
   status: z.enum(['GENERATING', 'COMPLETED', 'FAILED']),
   storage_uri: z.string().optional(),
+  version: z.number().int().default(1),
+  base_report_id: ReportIdSchema.optional(),
+  parameters: z.record(z.string(), z.any()).optional(),
   created_at: TimestampSchema
 });
 
@@ -98,6 +101,8 @@ export const UserSchema = z.object({
   password_hash: z.string().optional()
 });
 
+export type UserV1 = z.infer<typeof UserSchema>;
+
 export const CaseSchema = z.object({
   id: CaseIdSchema,
   title: z.string(),
@@ -105,6 +110,7 @@ export const CaseSchema = z.object({
   owner_id: UserIdSchema,
   classification: z.string()
 });
+export type CaseV1 = z.infer<typeof CaseSchema>;
 
 export const AuditEventRefSchema = z.object({
   event_id: z.string(),
@@ -114,6 +120,7 @@ export const AuditEventRefSchema = z.object({
   hash: z.string(),
   previous_hash: z.string()
 });
+export type AuditEventRefV1 = z.infer<typeof AuditEventRefSchema>;
 
 // --- Downstream Response Validation Schemas (D3/D4/ML) ---
 export const MLResponseSchema = z.object({
@@ -135,4 +142,18 @@ export const GraphResponseSchema = z.object({
 export const AIResponseSchema = z.object({
   results: z.array(z.any()),
   insights: z.array(z.any()).optional()
+});
+
+export const AnomalyResponseSchema = z.object({
+  anomaly_score: z.number().min(0).max(1),
+  flags: z.array(z.string()),
+  explanation: z.string().optional()
+});
+
+export const RelationshipResponseSchema = z.object({
+  id: RelationshipIdSchema,
+  source_id: z.string(),
+  target_id: z.string(),
+  type: z.string(),
+  weight: z.number().optional()
 });

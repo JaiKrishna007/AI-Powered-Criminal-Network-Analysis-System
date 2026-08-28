@@ -65,6 +65,24 @@ services:
     networks:
       - netra
 
+  ml_service:
+    image: alpine:latest
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    networks:
+      - netra
+
+  d3_service:
+    image: alpine:latest
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    networks:
+      - netra
+
+  d4_service:
+    image: alpine:latest
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    networks:
+      - netra
+
 volumes:
   evidence_data:
   mongodb_data:

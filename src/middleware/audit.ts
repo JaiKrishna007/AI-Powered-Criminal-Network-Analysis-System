@@ -4,13 +4,18 @@ import { db } from '../db';
 import { AuditEventRef } from '../models/types';
 import { AuthenticatedRequest } from './auth';
 
+export interface RequestWithCorrelation extends Request {
+  correlationId?: string;
+}
+
 export class AuditMiddleware {
   /**
-   * 40. Generates X-Correlation-ID for all requests
+   * 40. Generates X-Correlation-ID for all requests (Issue 29)
    */
-  public static correlationId(req: Request, res: Response, next: NextFunction) {
+  public static correlationId(req: RequestWithCorrelation, res: Response, next: NextFunction) {
     const correlationId = req.headers['x-correlation-id'] as string || uuidv4();
     req.headers['x-correlation-id'] = correlationId;
+    req.correlationId = correlationId;
     res.setHeader('X-Correlation-ID', correlationId);
     next();
   }

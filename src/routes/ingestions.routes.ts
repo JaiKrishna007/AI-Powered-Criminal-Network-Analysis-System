@@ -17,12 +17,13 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Ingestion job not found' });
   }
 
-  // Authorize based on case membership
-  if (!req.user!.roles.includes('SYSTEM ADMIN')) {
-    const hasAccess = await db.isUserMemberOfCase(req.user!.id, job.case_id);
-    if (!hasAccess) {
-      return res.status(403).json({ error: 'FORBIDDEN', message: 'Not authorized for this case scope' });
-    }
+  try {
+    await AuthMiddleware.authorizeCaseAccess({
+      userId: req.user!.id,
+      caseId: job.case_id
+    });
+  } catch (err: any) {
+    return res.status(403).json({ error: 'FORBIDDEN', message: err.message || 'Access denied' });
   }
 
   return res.status(200).json({ job });

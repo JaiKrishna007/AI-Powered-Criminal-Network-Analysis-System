@@ -45,11 +45,14 @@ export class ControlPlaneDB {
     
     // 1. Connect and Ping (Task 30)
     await mongoClient.connect();
-    this.db = mongoClient.db('netra');
+    const dbName = process.env.MONGODB_DB || 'netra';
+    this.db = mongoClient.db(dbName);
     await this.db.command({ ping: 1 }); // Ensures availability
     
     // 2. Setup Indexes (Task 28)
-    await this.setupIndexes();
+    if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DB_MIGRATION === 'true') {
+      await this.setupIndexes();
+    }
 
     // 3. Seed Roles (Task 29)
     await this.seedRoles();
@@ -398,8 +401,14 @@ export class ControlPlaneDB {
     return evt as unknown as AuditEventRef;
   }
 
+  // Serialize audit writes to prevent hash chain branching (Issue 27)
+  private auditMutex: Promise<any> = Promise.resolve();
+
   public async createAuditEvent(event: any): Promise<AuditEventRef> {
-    const previousEvent = await this.getLatestAuditEvent();
+    return new Promise((resolve, reject) => {
+      this.auditMutex = this.auditMutex.then(async () => {
+        try {
+          const previousEvent = await this.getLatestAuditEvent();
     const previousHash = previousEvent ? previousEvent.hash : 'GENESIS';
     
     const dataString = JSON.stringify({
@@ -416,12 +425,17 @@ export class ControlPlaneDB {
     event.previous_hash = previousHash;
     event.hash = hash;
 
-    if (this.isTestEnv) {
-      this.testAuditEvents.set(event.event_id, event);
-      return event;
-    }
-    await this.getCollection('audit_event_ref').insertOne({ ...event });
-    return event;
+          if (this.isTestEnv) {
+            this.testAuditEvents.set(event.event_id, event);
+            return resolve(event);
+          }
+          await this.getCollection('audit_event_ref').insertOne({ ...event });
+          resolve(event);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
   }
 
   public async getAuditEvent(event_id: string): Promise<AuditEventRef | null> {

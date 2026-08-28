@@ -8,6 +8,7 @@ export interface AuthContext {
   role: string;
   case_id: string;
   access_level: string;
+  correlation_id?: string;
 }
 
 const AIResponseSchema = z.object({
@@ -33,12 +34,26 @@ export class AIClient {
     const id = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Authorization-Context': JSON.stringify({
+          user_id: context.user_id,
+          role: context.role,
+          case_id: context.case_id,
+          access_level: context.access_level
+        })
+      };
+
+      if (context.correlation_id) {
+        headers['X-Correlation-ID'] = context.correlation_id;
+      }
+
+      // Legacy fallback
+      headers['Authorization'] = JSON.stringify(context);
+
       const response = await fetch(`${D3_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': JSON.stringify(context)
-        },
+        headers,
         body: JSON.stringify({ context, ...payload }),
         signal: controller.signal
       });
@@ -46,7 +61,13 @@ export class AIClient {
       clearTimeout(id);
 
       if (!response.ok) {
-        throw ServiceErrors.AI_SERVICE_UNAVAILABLE();
+        if (response.status === 401 || response.status === 403) {
+           throw ServiceErrors.DOWNSTREAM_UNAUTHORIZED('AI_SERVICE');
+        } else if (response.status >= 500) {
+           throw ServiceErrors.DOWNSTREAM_FAILURE('AI_SERVICE');
+        } else {
+           throw ServiceErrors.AI_SERVICE_UNAVAILABLE();
+        }
       }
 
       const data = await response.json();

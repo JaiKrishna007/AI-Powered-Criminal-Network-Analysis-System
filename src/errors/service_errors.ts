@@ -20,6 +20,8 @@ export const ServiceErrors = {
   INVALID_SERVICE_RESPONSE: (details?: any) => new ServiceError('INVALID_SERVICE_RESPONSE', 'Downstream service returned an invalid response.', 502, details),
   CASE_ACCESS_DENIED: () => new ServiceError('CASE_ACCESS_DENIED', 'You are not authorized to access this case.', 403),
   SERVICE_TIMEOUT: (serviceName: string) => new ServiceError(`${serviceName}_TIMEOUT`, `${serviceName} timed out.`, 504),
+  DOWNSTREAM_UNAUTHORIZED: (serviceName: string) => new ServiceError('DOWNSTREAM_UNAUTHORIZED', `Unauthorized access to ${serviceName}.`, 403),
+  DOWNSTREAM_FAILURE: (serviceName: string) => new ServiceError('DOWNSTREAM_FAILURE', `${serviceName} encountered an internal error.`, 502),
 };
 
 export function handleServiceError(error: any): ServiceError {

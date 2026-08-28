@@ -19,11 +19,26 @@ export class GraphClient {
     const id = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Authorization-Context': JSON.stringify({
+          user_id: context.user_id,
+          role: context.role,
+          case_id: context.case_id,
+          access_level: context.access_level
+        })
+      };
+
+      if (context.correlation_id) {
+        headers['X-Correlation-ID'] = context.correlation_id;
+      }
+
+      // Legacy fallback
+      headers['Authorization'] = JSON.stringify(context);
+
       const response = await fetch(`${D4_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ context, ...payload }),
         signal: controller.signal
       });
@@ -31,7 +46,13 @@ export class GraphClient {
       clearTimeout(id);
 
       if (!response.ok) {
-        throw ServiceErrors.GRAPH_SERVICE_UNAVAILABLE();
+        if (response.status === 401 || response.status === 403) {
+           throw ServiceErrors.DOWNSTREAM_UNAUTHORIZED('GRAPH_SERVICE');
+        } else if (response.status >= 500) {
+           throw ServiceErrors.DOWNSTREAM_FAILURE('GRAPH_SERVICE');
+        } else {
+           throw ServiceErrors.GRAPH_SERVICE_UNAVAILABLE();
+        }
       }
 
       const data = await response.json();

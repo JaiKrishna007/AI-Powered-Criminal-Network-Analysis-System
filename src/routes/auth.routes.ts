@@ -19,11 +19,13 @@ router.post('/login', async (req, res) => {
   const user = users.find(u => u.display_name === username);
 
   if (!user || !user.password_hash) {
+    await AuditMiddleware.logAction(username, 'LOGIN_FAILURE');
     return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid credentials.' });
   }
 
   const isValid = await bcrypt.compare(password, user.password_hash);
   if (!isValid) {
+    await AuditMiddleware.logAction(user.id, 'LOGIN_FAILURE');
     return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid credentials.' });
   }
 

@@ -52,7 +52,7 @@ export class EntityResolutionService {
   }> {
     
     // Call ML service to get probability and signals (Task 36)
-    let mlResponse = { probability: 0, signals: {} as any };
+    let mlResponse: { probability: number; signals?: Record<string, number> } = { probability: 0 };
     
     if (process.env.NODE_ENV === 'test') {
       mlResponse.probability = 0.95; // Mock high score for testing

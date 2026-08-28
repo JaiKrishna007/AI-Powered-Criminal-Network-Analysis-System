@@ -1,13 +1,30 @@
 export interface ExtractedCandidateRecord {
   name: string;
+  type: string; // PERSON, PHONE, IMEI, ACCOUNT, VEHICLE, LOCATION, ORGANIZATION, CASE, EVENT
   phone?: string;
   identifiers?: Record<string, string>;
   context?: Record<string, any>;
 }
 
+export interface ExtractedRelationshipRecord {
+  source_name: string;
+  target_name: string;
+  type: string; // CALLED, TRANSFERRED_MONEY, USED, VISITED, MET_AT, LINKED_TO
+  properties?: Record<string, any>;
+}
+
+export interface ExtractedEventRecord {
+  name: string;
+  event_time?: string;
+  properties?: Record<string, any>;
+}
+
 export interface ExtractedMetadata {
   raw_text?: string;
-  records: ExtractedCandidateRecord[];
+  records: ExtractedCandidateRecord[]; // entities
+  relationships?: ExtractedRelationshipRecord[];
+  events?: ExtractedEventRecord[];
+  source_spans?: Array<{ type: string; value: string; index: number; length: number }>;
 }
 
 export interface IExtractionWorker {

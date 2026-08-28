@@ -50,7 +50,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * Create Case
  */
-router.post('/', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', AuditMiddleware.auditEvent('CASE_CREATE'), async (req: AuthenticatedRequest, res: Response) => {
   const { id, title, status, classification } = req.body;
   if (!id || !title) {
     return res.status(400).json({ error: 'MISSING_FIELDS', message: 'id and title are required' });
@@ -71,7 +71,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * Get Case details
  */
-router.get('/:case_id', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:case_id', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('CASE_ACCESS'), async (req: AuthenticatedRequest, res: Response) => {
   const caseObj = await db.getCase(req.params.case_id);
   if (!caseObj) {
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found' });
@@ -82,7 +82,7 @@ router.get('/:case_id', AuthMiddleware.requireCaseAccess, async (req: Authentica
 /**
  * Add Case Member
  */
-router.post('/:case_id/members', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:case_id/members', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('CASE_UPDATE'), async (req: AuthenticatedRequest, res: Response) => {
   const caseId = req.params.case_id;
   const { user_id, access_level } = req.body;
 
@@ -128,11 +128,10 @@ router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req
       classification
     });
 
-    return res.status(200).json({
-      status: 'SUCCESS',
+    return res.status(202).json({
+      status: 'QUEUED',
       job: result.job,
       evidence: result.evidence,
-      candidates: result.candidatesExtracted,
       is_duplicate: result.isDuplicate || false
     });
   } catch (err: any) {
@@ -181,17 +180,18 @@ router.post('/:case_id/entities/resolve', AuthMiddleware.requireCaseAccess, asyn
 });
 
 // Helper for AI/Graph auth context
-const buildAuthContext = (req: AuthenticatedRequest, caseId: string) => ({
+const buildAuthContext = (req: AuthenticatedRequest & { correlationId?: string }, caseId: string) => ({
   user_id: req.user!.id,
   role: req.user!.roles[0],
   case_id: caseId,
-  access_level: 'MEMBER' // Prototype simplification
+  access_level: 'MEMBER', // Prototype simplification
+  correlation_id: req.correlationId
 });
 
 /**
  * 16. Search Endpoint
  */
-router.post('/:case_id/search', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+router.post('/:case_id/search', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('SEARCH'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { query, filters } = req.body;
     const result = await AIClient.searchCase(buildAuthContext(req, req.params.case_id), query, filters);
@@ -204,7 +204,7 @@ router.post('/:case_id/search', AuthMiddleware.requireCaseAccess, async (req: Au
 /**
  * 17. Copilot Endpoint
  */
-router.post('/:case_id/copilot', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+router.post('/:case_id/copilot', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('COPILOT'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { query } = req.body;
     const result = await AIClient.copilot(buildAuthContext(req, req.params.case_id), query);
@@ -217,7 +217,7 @@ router.post('/:case_id/copilot', AuthMiddleware.requireCaseAccess, async (req: A
 /**
  * 18. Leads Endpoint
  */
-router.post('/:case_id/leads', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+router.post('/:case_id/leads', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('LEAD_GENERATION'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { request } = req.body;
     const result = await AIClient.generateLeads(buildAuthContext(req, req.params.case_id), request);
@@ -230,7 +230,7 @@ router.post('/:case_id/leads', AuthMiddleware.requireCaseAccess, async (req: Aut
 /**
  * 19. Graph Endpoint
  */
-router.get('/:case_id/graph', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+router.get('/:case_id/graph', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('GRAPH_ACCESS'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { entityId, hops } = req.query;
     const result = await GraphClient.getFocusedGraph(buildAuthContext(req, req.params.case_id), entityId as string, Number(hops) || 2);
@@ -243,7 +243,7 @@ router.get('/:case_id/graph', AuthMiddleware.requireCaseAccess, async (req: Auth
 /**
  * 20. Bridge Endpoint
  */
-router.post('/:case_id/analytics/bridge', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+router.post('/:case_id/analytics/bridge', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('GRAPH_ACCESS'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const result = await GraphClient.getBridgeAnalysis(buildAuthContext(req, req.params.case_id));
     return res.status(200).json(result);
@@ -255,7 +255,7 @@ router.post('/:case_id/analytics/bridge', AuthMiddleware.requireCaseAccess, asyn
 /**
  * 21. Temporal Endpoint
  */
-router.post('/:case_id/analytics/temporal', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+router.post('/:case_id/analytics/temporal', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('GRAPH_ACCESS'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { timeRange } = req.body;
     const result = await GraphClient.getTemporalAnalysis(buildAuthContext(req, req.params.case_id), timeRange);
@@ -268,10 +268,10 @@ router.post('/:case_id/analytics/temporal', AuthMiddleware.requireCaseAccess, as
 /**
  * 23. Reports Endpoint
  */
-router.post('/:case_id/reports', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response, next) => {
+router.post('/:case_id/reports', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('REPORT_GENERATION'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { parameters } = req.body;
-    const { ReportService } = await import('../services/report.service');
+    const { ReportService } = await import('../services/report.service.js');
     const report = await ReportService.generateCaseReport(req.params.case_id, req.user!.id, parameters || {});
     return res.status(202).json({ 
       report_id: report.id,
