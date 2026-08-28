@@ -1,6 +1,23 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
+import { verifyAuthContext } from '../utils/security';
 
 const serviceType = process.argv[2] || process.env.SERVICE_TYPE || 'all';
+
+function authVerificationMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (req.path === '/health') return next();
+
+  const contextStr = (req.headers['x-authorization-context'] as string) || '';
+  const signatureStr = (req.headers['x-authorization-signature'] as string) || '';
+
+  // If signature is provided, verify it
+  if (contextStr && signatureStr) {
+    const isValid = verifyAuthContext(contextStr, signatureStr);
+    if (!isValid) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Invalid HMAC signature on authorization context' });
+    }
+  }
+  next();
+}
 
 function createMLApp() {
   const app = express();
@@ -42,6 +59,7 @@ function createMLApp() {
 function createD3App() {
   const app = express();
   app.use(express.json());
+  app.use(authVerificationMiddleware);
 
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', service: 'd3_service' });
@@ -92,6 +110,7 @@ function createD3App() {
 function createD4App() {
   const app = express();
   app.use(express.json());
+  app.use(authVerificationMiddleware);
 
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', service: 'd4_service' });

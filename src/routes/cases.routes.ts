@@ -179,14 +179,18 @@ router.post('/:case_id/entities/resolve', AuthMiddleware.requireCaseAccess, asyn
   }
 });
 
-// Helper for AI/Graph auth context
-const buildAuthContext = (req: AuthenticatedRequest & { correlationId?: string }, caseId: string) => ({
-  user_id: req.user!.id,
-  role: req.user!.roles[0],
-  case_id: caseId,
-  access_level: 'MEMBER', // Prototype simplification
-  correlation_id: req.correlationId
-});
+// Helper for AI/Graph auth context reading actual case access level from DB
+const buildAuthContext = async (req: AuthenticatedRequest & { correlationId?: string }, caseId: string) => {
+  const member = await db.getCaseMember(caseId, req.user!.id);
+  const accessLevel = member?.access_level || (req.user!.roles.includes('SYSTEM ADMIN') ? 'ADMIN' : 'INVESTIGATOR');
+  return {
+    user_id: req.user!.id,
+    role: req.user!.roles[0],
+    case_id: caseId,
+    access_level: accessLevel,
+    correlation_id: req.correlationId
+  };
+};
 
 /**
  * 16. Search Endpoint
@@ -194,7 +198,8 @@ const buildAuthContext = (req: AuthenticatedRequest & { correlationId?: string }
 router.post('/:case_id/search', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('SEARCH'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { query, filters } = req.body;
-    const result = await AIClient.searchCase(buildAuthContext(req, req.params.case_id), query, filters);
+    const authCtx = await buildAuthContext(req, req.params.case_id);
+    const result = await AIClient.searchCase(authCtx, query, filters);
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -207,7 +212,8 @@ router.post('/:case_id/search', AuthMiddleware.requireCaseAccess, AuditMiddlewar
 router.post('/:case_id/copilot', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('COPILOT'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { query } = req.body;
-    const result = await AIClient.copilot(buildAuthContext(req, req.params.case_id), query);
+    const authCtx = await buildAuthContext(req, req.params.case_id);
+    const result = await AIClient.copilot(authCtx, query);
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -220,7 +226,8 @@ router.post('/:case_id/copilot', AuthMiddleware.requireCaseAccess, AuditMiddlewa
 router.post('/:case_id/leads', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('LEAD_GENERATION'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { request } = req.body;
-    const result = await AIClient.generateLeads(buildAuthContext(req, req.params.case_id), request);
+    const authCtx = await buildAuthContext(req, req.params.case_id);
+    const result = await AIClient.generateLeads(authCtx, request);
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -233,7 +240,8 @@ router.post('/:case_id/leads', AuthMiddleware.requireCaseAccess, AuditMiddleware
 router.get('/:case_id/graph', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('GRAPH_ACCESS'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { entityId, hops } = req.query;
-    const result = await GraphClient.getFocusedGraph(buildAuthContext(req, req.params.case_id), entityId as string, Number(hops) || 2);
+    const authCtx = await buildAuthContext(req, req.params.case_id);
+    const result = await GraphClient.getFocusedGraph(authCtx, entityId as string, Number(hops) || 2);
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -245,7 +253,8 @@ router.get('/:case_id/graph', AuthMiddleware.requireCaseAccess, AuditMiddleware.
  */
 router.post('/:case_id/analytics/bridge', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('GRAPH_ACCESS'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    const result = await GraphClient.getBridgeAnalysis(buildAuthContext(req, req.params.case_id));
+    const authCtx = await buildAuthContext(req, req.params.case_id);
+    const result = await GraphClient.getBridgeAnalysis(authCtx);
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -258,7 +267,8 @@ router.post('/:case_id/analytics/bridge', AuthMiddleware.requireCaseAccess, Audi
 router.post('/:case_id/analytics/temporal', AuthMiddleware.requireCaseAccess, AuditMiddleware.auditEvent('GRAPH_ACCESS'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { timeRange } = req.body;
-    const result = await GraphClient.getTemporalAnalysis(buildAuthContext(req, req.params.case_id), timeRange);
+    const authCtx = await buildAuthContext(req, req.params.case_id);
+    const result = await GraphClient.getTemporalAnalysis(authCtx, timeRange);
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -272,7 +282,7 @@ router.post('/:case_id/reports', AuthMiddleware.requireCaseAccess, AuditMiddlewa
   try {
     const { parameters } = req.body;
     const { ReportService } = await import('../services/report.service.js');
-    const authContext = buildAuthContext(req, req.params.case_id);
+    const authContext = await buildAuthContext(req, req.params.case_id);
     const report = await ReportService.generateCaseReport(authContext, parameters || {});
     return res.status(202).json({ 
       report_id: report.id,

@@ -388,9 +388,126 @@ describe('Report Service & Mock Services Tests', () => {
     await GraphClient.getFocusedGraph(authCtx, 'ENT-1', 2);
     expect(capturedGraphHeaders).toBeDefined();
     expect(capturedGraphHeaders['X-Authorization-Context']).toBeDefined();
+    expect(capturedGraphHeaders['X-Authorization-Signature']).toBeDefined();
     expect(capturedGraphHeaders['X-Correlation-ID']).toBe('CORR-TEST-123');
     expect(capturedGraphHeaders['Authorization']).toBeUndefined(); // Legacy removed!
 
     global.fetch = originalFetch;
+  });
+
+  it('Issue 12: Authorization context is signed with HMAC-SHA256 and verified', async () => {
+    const { signAuthContext, verifyAuthContext } = await import('../src/utils/security.js');
+
+    const context = {
+      user_id: 'USR-INV-01',
+      role: 'INVESTIGATOR',
+      case_id: 'CASE-ALPHA',
+      access_level: 'ADMIN'
+    };
+
+    const { contextHeader, signatureHeader } = signAuthContext(context);
+    expect(contextHeader).toBeDefined();
+    expect(signatureHeader).toBeDefined();
+
+    // Verification succeeds with unaltered context
+    const isValid = verifyAuthContext(contextHeader, signatureHeader);
+    expect(isValid).toBe(true);
+
+    // Verification fails if context is tampered
+    const tamperedContext = JSON.stringify({ ...context, role: 'SYSTEM ADMIN' });
+    const isTamperedValid = verifyAuthContext(tamperedContext, signatureHeader);
+    expect(isTamperedValid).toBe(false);
+  });
+
+  it('Issue 13: Case access level is dynamically read from case membership rather than hardcoded', async () => {
+    // Add specific custom membership level
+    await db.addCaseMember({
+      case_id: 'CASE-ALPHA',
+      user_id: 'USR-INV-01',
+      access_level: 'LEAD_INVESTIGATOR'
+    });
+
+    const { AIClient } = await import('../src/services/ai_client.js');
+    const aiSpy = vi.spyOn(AIClient, 'searchCase').mockResolvedValueOnce({ status: 'SUCCESS', results: [] });
+
+    // Call case search endpoint
+    await request(app)
+      .post('/api/cases/CASE-ALPHA/search')
+      .set('x-user-id', 'USR-INV-01')
+      .set('x-user-roles', 'INVESTIGATOR')
+      .send({ query: 'suspect' });
+
+    expect(aiSpy).toHaveBeenCalled();
+    const calledContext = aiSpy.mock.calls[0][0];
+    expect(calledContext.case_id).toBe('CASE-ALPHA');
+    expect(calledContext.user_id).toBe('USR-INV-01');
+    expect(calledContext.access_level).not.toBe('MEMBER');
+  });
+
+  it('Issue 14: Classification hierarchy is strictly enforced (PUBLIC, CASE_RESTRICTED, SENSITIVE, SECRET, TOP_SECRET)', async () => {
+    const { AuthMiddleware } = await import('../src/middleware/auth.js');
+
+    // USR-INV-01 has clearance_level: 3 (SECRET)
+    // 1. Can access PUBLIC (0), CASE_RESTRICTED (1), SENSITIVE (2), SECRET (3)
+    await expect(
+      AuthMiddleware.authorizeCaseAccess({ userId: 'USR-INV-01', caseId: 'CASE-ALPHA', classification: 'SENSITIVE' })
+    ).resolves.not.toThrow();
+
+    await expect(
+      AuthMiddleware.authorizeCaseAccess({ userId: 'USR-INV-01', caseId: 'CASE-ALPHA', classification: 'SECRET' })
+    ).resolves.not.toThrow();
+
+    // 2. Denied access to TOP_SECRET (4)
+    await expect(
+      AuthMiddleware.authorizeCaseAccess({ userId: 'USR-INV-01', caseId: 'CASE-ALPHA', classification: 'TOP_SECRET' })
+    ).rejects.toThrow();
+  });
+
+  it('Issue 15: Extraction Worker extracts all 9 defined entity types (PERSON, PHONE, IMEI, ACCOUNT, VEHICLE, LOCATION, ORGANIZATION, CASE, EVENT)', async () => {
+    const { DefaultExtractionWorker } = await import('../src/workers/extraction_worker.adapter.js');
+    const worker = new DefaultExtractionWorker();
+
+    // Test text extraction
+    const rawText = `
+      Name: Vikram Sharma
+      Phone: +919876543210
+      IMEI: 867530901234567
+      Account: ACC-998877
+      Vehicle: MH-02-AB-1234
+      Location: Connaught Place, New Delhi
+      Organization: Shadow Logistics
+      Case: FIR-2026-99
+      Event: Night Meeting 01
+    `;
+
+    const extracted = await worker.extract('TEXT', rawText);
+    const types = new Set(extracted.records.map(r => r.type));
+
+    expect(types.has('PERSON')).toBe(true);
+    expect(types.has('PHONE')).toBe(true);
+    expect(types.has('IMEI')).toBe(true);
+    expect(types.has('ACCOUNT')).toBe(true);
+    expect(types.has('VEHICLE')).toBe(true);
+    expect(types.has('LOCATION')).toBe(true);
+    expect(types.has('ORGANIZATION')).toBe(true);
+    expect(types.has('CASE')).toBe(true);
+    expect(types.has('EVENT')).toBe(true);
+
+    // Test CSV extraction with all columns
+    const csvContent = `Name,Phone,IMEI,Account,Vehicle,Location,Organization,Case,Event
+Rahul Verma,+919123456780,123456789012345,SBIN000123,DL-1C-9999,Bandra West,Alpha Syndicate,CRIME-882,Midnight Call`;
+
+    const csvExtracted = await worker.extract('CSV', csvContent);
+    const csvTypes = new Set(csvExtracted.records.map(r => r.type));
+
+    expect(csvTypes.has('PERSON')).toBe(true);
+    expect(csvTypes.has('PHONE')).toBe(true);
+    expect(csvTypes.has('IMEI')).toBe(true);
+    expect(csvTypes.has('ACCOUNT')).toBe(true);
+    expect(csvTypes.has('VEHICLE')).toBe(true);
+    expect(csvTypes.has('LOCATION')).toBe(true);
+    expect(csvTypes.has('ORGANIZATION')).toBe(true);
+    expect(csvTypes.has('CASE')).toBe(true);
+    expect(csvTypes.has('EVENT')).toBe(true);
   });
 });

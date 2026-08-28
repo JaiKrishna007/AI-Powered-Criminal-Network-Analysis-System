@@ -28,20 +28,25 @@ const LeadResponseSchema = z.object({
   leads: z.array(z.any())
 }).passthrough();
 
+import { signAuthContext } from '../utils/security';
+
 export class AIClient {
   static async fetchD3(endpoint: string, context: AuthContext, payload: any, timeoutMs: number = 30000, schema?: z.ZodTypeAny) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const { contextHeader, signatureHeader } = signAuthContext({
+        user_id: context.user_id,
+        role: context.role,
+        case_id: context.case_id,
+        access_level: context.access_level
+      });
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'X-Authorization-Context': JSON.stringify({
-          user_id: context.user_id,
-          role: context.role,
-          case_id: context.case_id,
-          access_level: context.access_level
-        })
+        'X-Authorization-Context': contextHeader,
+        'X-Authorization-Signature': signatureHeader
       };
 
       if (context.correlation_id) {

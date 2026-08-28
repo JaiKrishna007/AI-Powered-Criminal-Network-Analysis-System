@@ -260,6 +260,24 @@ export class ControlPlaneDB {
     return !!cmRes;
   }
 
+  public async getCaseMember(case_id: string, user_id: string): Promise<CaseMember | null> {
+    if (this.isTestEnv) {
+      const c = this.testCases.get(case_id);
+      if (c && c.owner_id === user_id) {
+        return { case_id, user_id, access_level: 'OWNER' };
+      }
+      return this.testCaseMembers.find(cm => cm.case_id === case_id && cm.user_id === user_id) || null;
+    }
+    const cRes = await this.getCollection('cases').findOne({ id: case_id });
+    if (cRes && cRes.owner_id === user_id) {
+      return { case_id, user_id, access_level: 'OWNER' };
+    }
+    const cmRes = await this.getCollection('case_members').findOne({ case_id, user_id });
+    if (!cmRes) return null;
+    const { _id, ...cm } = cmRes;
+    return cm as unknown as CaseMember;
+  }
+
   // --- 4. Evidence ---
   public async createEvidence(ev: Evidence): Promise<Evidence> {
     if (this.isTestEnv) {
