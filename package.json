@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "D2",
+    "D3",
     "D4/System graph intelligence security",
     "shared-contracts"
   ]

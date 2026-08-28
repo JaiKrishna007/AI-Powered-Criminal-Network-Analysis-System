@@ -134,13 +134,26 @@ export class IngestionService {
     // We pass the identifiers needed by the worker. We do not pass large buffers.
     if (process.env.NODE_ENV !== 'test') {
       const { ingestionQueue } = require('../workers/ingestion.queue');
+      const { signAuthContext } = require('../utils/security');
+      const { contextHeader, signatureHeader } = signAuthContext({
+        user_id: payload.userContext.user_id,
+        actor_id: payload.userContext.actor_id || payload.userContext.user_id,
+        role: payload.userContext.role,
+        case_id: payload.userContext.case_id,
+        allowed_case_ids: payload.userContext.allowed_case_ids || [payload.userContext.case_id],
+        access_level: payload.userContext.access_level,
+        correlation_id: payload.userContext.correlation_id || ''
+      });
+
       await ingestionQueue.add('ingest', {
         jobId,
         caseId: payload.case_id,
         normalizedType,
         evidenceId,
         storageUri,
-        userContext: payload.userContext
+        userContext: payload.userContext,
+        contextHeader,
+        signatureHeader
       }, {
         attempts: 3, // Safe retries for transient failures (Task 33)
         backoff: { type: 'exponential', delay: 2000 },

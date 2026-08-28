@@ -86,7 +86,7 @@ export class AIClient {
   }
 
   static async copilot(context: AuthContext, query: string) {
-    return await this.fetchD3('/copilot', context, { query }, 30000, CopilotResponseSchema);
+    return await this.fetchD3('/api/m2m/copilot', context, { query }, 30000, CopilotResponseSchema);
   }
 
   static async generateLeads(context: AuthContext, request: any) {
