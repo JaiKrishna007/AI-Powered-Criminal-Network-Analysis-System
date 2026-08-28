@@ -133,4 +133,55 @@ describe('E2E Case 1042 Simulation', () => {
       await fs.unlink(filePath);
     } catch(e) {}
   });
+
+  it('Issue 39: Proves authentic cookie-based login and session authentication flow without x-user-id header', async () => {
+    const bcrypt = (await import('bcrypt')).default;
+    const passwordHash = await bcrypt.hash('secretPassword123', 10);
+
+    // 1. Create user with hashed password
+    await db.createUser({
+      id: 'USR-AUTH-REAL',
+      display_name: 'Real Session Officer',
+      status: 'ACTIVE',
+      clearance_level: 3,
+      password_hash: passwordHash
+    });
+    await db.assignUserRole('USR-AUTH-REAL', 'INVESTIGATOR');
+    await db.addCaseMember('CASE-1042', 'USR-AUTH-REAL', 'ADMIN');
+
+    // 2. Perform authentic POST /api/auth/login
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({
+        username: 'Real Session Officer',
+        password: 'secretPassword123'
+      });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.message).toBe('Login successful');
+
+    // Extract Session Cookie
+    const cookies = loginRes.headers['set-cookie'];
+    expect(cookies).toBeDefined();
+    const sessionCookie = Array.isArray(cookies) ? cookies[0] : cookies;
+    expect(sessionCookie).toMatch(/connect\.sid/);
+
+    // 3. Access protected GET /api/me using ONLY the session cookie (NO x-user-id header)
+    const meRes = await request(app)
+      .get('/api/me')
+      .set('Cookie', sessionCookie);
+
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.id).toBe('USR-AUTH-REAL');
+    expect(meRes.body.roles).toContain('INVESTIGATOR');
+
+    // 4. Access protected GET /api/cases using ONLY the session cookie
+    const casesRes = await request(app)
+      .get('/api/cases')
+      .set('Cookie', sessionCookie);
+
+    expect(casesRes.status).toBe(200);
+    expect(Array.isArray(casesRes.body.cases)).toBe(true);
+    expect(casesRes.body.cases.some((c: any) => c.id === 'CASE-1042')).toBe(true);
+  });
 });

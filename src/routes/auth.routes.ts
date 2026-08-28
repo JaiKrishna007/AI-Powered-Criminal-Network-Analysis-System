@@ -14,9 +14,9 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'BAD_REQUEST', message: 'Username and password are required.' });
   }
 
-  // Find user by display_name
+  // Find user by display_name or id
   const users = await db.getAllUsers();
-  const user = users.find(u => u.display_name === username);
+  const user = users.find(u => u.display_name === username || u.id === username);
 
   if (!user || !user.password_hash) {
     await AuditMiddleware.logAction(username, 'LOGIN_FAILURE');

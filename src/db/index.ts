@@ -79,7 +79,19 @@ export class ControlPlaneDB {
 
   private async setupIndexes() {
     if (!this.db) return;
-    const collections = ['users', 'roles', 'cases', 'case_members', 'evidence', 'ingestion_jobs', 'entity_review', 'audit_event_ref', 'reports'];
+    const collections = [
+      'users',
+      'roles',
+      'user_roles',
+      'cases',
+      'case_members',
+      'evidence',
+      'ingestion_jobs',
+      'entity_review',
+      'candidates',
+      'audit_event_ref',
+      'reports'
+    ];
     for (const coll of collections) {
       // Ensure collections exist to avoid "ns does not exist" errors
       const collinfo = await this.db.listCollections({ name: coll }).toArray();
@@ -90,17 +102,23 @@ export class ControlPlaneDB {
 
     await this.db.collection('users').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('roles').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('user_roles').createIndex({ user_id: 1, role_id: 1 }, { unique: true });
+    await this.db.collection('user_roles').createIndex({ user_id: 1 });
     await this.db.collection('cases').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('case_members').createIndex({ case_id: 1, user_id: 1 }, { unique: true });
     await this.db.collection('evidence').createIndex({ case_id: 1, sha256: 1 }, { unique: true });
     await this.db.collection('ingestion_jobs').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('entity_review').createIndex({ candidate_id: 1 }, { unique: true });
+    await this.db.collection('candidates').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('candidates').createIndex({ case_id: 1 });
+    await this.db.collection('candidates').createIndex({ status: 1 });
     await this.db.collection('audit_event_ref').createIndex({ event_id: 1 }, { unique: true });
     await this.db.collection('audit_event_ref').createIndex({ actor_id: 1, timestamp: -1 });
     await this.db.collection('audit_event_ref').createIndex({ case_id: 1, timestamp: -1 });
     await this.db.collection('audit_event_ref').createIndex({ action: 1, timestamp: -1 });
     await this.db.collection('reports').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('reports').createIndex({ case_id: 1, version: 1 }, { unique: true });
+    await this.db.collection('reports').createIndex({ case_id: 1, created_at: -1 });
   }
 
   private async seedRoles() {
@@ -265,6 +283,50 @@ export class ControlPlaneDB {
     });
   }
 
+  public async getCasesForUser(userId: string, isSystemAdmin: boolean = false, filters?: { status?: string; search?: string }): Promise<Case[]> {
+    if (this.isTestEnv) {
+      let cases = Array.from(this.testCases.values());
+      if (!isSystemAdmin) {
+        const memberCaseIds = new Set(this.testCaseMembers.filter(cm => cm.user_id === userId).map(cm => cm.case_id));
+        cases = cases.filter(c => c.owner_id === userId || memberCaseIds.has(c.id));
+      }
+      if (filters?.status) {
+        cases = cases.filter(c => c.status === filters.status);
+      }
+      if (filters?.search) {
+        const query = filters.search.toLowerCase();
+        cases = cases.filter(c => c.title.toLowerCase().includes(query) || c.id.toLowerCase().includes(query));
+      }
+      return cases;
+    }
+
+    const query: any = {};
+    if (filters?.status) {
+      query.status = filters.status;
+    }
+    if (filters?.search) {
+      query.$or = [
+        { title: { $regex: filters.search, $options: 'i' } },
+        { id: { $regex: filters.search, $options: 'i' } }
+      ];
+    }
+
+    if (!isSystemAdmin) {
+      const memberships = await this.getCollection('case_members').find({ user_id: userId }).toArray();
+      const caseIds = memberships.map(m => m.case_id);
+      query.$or = [
+        { id: { $in: caseIds } },
+        { owner_id: userId }
+      ];
+    }
+
+    const res = await this.getCollection('cases').find(query).toArray();
+    return res.map(row => {
+      const { _id, ...c } = row;
+      return c as unknown as Case;
+    });
+  }
+
   public async addCaseMember(memberOrCaseId: CaseMember | string, userId?: string, accessLevel: string = 'MEMBER'): Promise<CaseMember> {
     const member: CaseMember = typeof memberOrCaseId === 'string'
       ? { case_id: memberOrCaseId, user_id: userId!, access_level: accessLevel }
@@ -365,6 +427,29 @@ export class ControlPlaneDB {
     return res.map(row => {
       const { _id, ...ev } = row;
       return ev as unknown as Evidence;
+    });
+  }
+
+  public async getAuthorizedEvidenceByCase(
+    userContext: { user_id: string; clearance_level?: number; roles?: string[] },
+    case_id: string
+  ): Promise<Evidence[]> {
+    const allEvidence = await this.getEvidenceByCase(case_id);
+    const CLASSIFICATION_LEVELS: Record<string, number> = {
+      PUBLIC: 0,
+      UNCLASSIFIED: 0,
+      CONFIDENTIAL: 1,
+      CASE_RESTRICTED: 2,
+      RESTRICTED: 2,
+      SENSITIVE: 3,
+      SECRET: 3,
+      TOP_SECRET: 4
+    };
+
+    const userClearance = userContext.clearance_level ?? 0;
+    return allEvidence.filter(ev => {
+      const required = CLASSIFICATION_LEVELS[ev.classification || 'PUBLIC'] ?? 0;
+      return userClearance >= required;
     });
   }
 

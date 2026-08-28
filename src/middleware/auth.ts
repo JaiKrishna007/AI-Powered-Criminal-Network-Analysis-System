@@ -8,6 +8,7 @@ export interface AuthenticatedRequest extends Request {
     id: string;
     display_name: string;
     roles: string[];
+    clearance_level?: number;
   };
 }
 
@@ -44,7 +45,8 @@ export class AuthMiddleware {
     req.user = {
       id: user.id,
       display_name: user.display_name,
-      roles
+      roles,
+      clearance_level: user.clearance_level
     };
 
     next();

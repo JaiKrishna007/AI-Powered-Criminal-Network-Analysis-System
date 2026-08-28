@@ -18,31 +18,8 @@ router.use(AuthMiddleware.authenticate);
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   const status = req.query.status as string;
   const search = req.query.search as string;
-
-  // Ideally, db.getCasesByMember(userId, filters) would be implemented.
-  // For the prototype, we assume we fetch all and filter or db layer handles it.
-  // Let's implement a basic fetch.
-  // In a real app, this should query MongoDB directly with `owner_id` or members array.
-  // For now, we'll return a mock or empty if db method doesn't exist, but we can assume db.getAllCases exists or we just return an empty array if not.
-  // Since db.getAllCases doesn't exist in our mocked types yet, we can use a stub.
-  const allCases = await db.getAllCases?.() || []; 
-  
-  let filtered = allCases.filter((c: Case) => {
-    if (status && c.status !== status) return false;
-    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
-
-  // Filter by membership unless ADMIN
-  if (!req.user!.roles.includes('SYSTEM ADMIN')) {
-    const memberCases = [];
-    for (const c of filtered) {
-      if (await db.isUserMemberOfCase(req.user!.id, c.id)) {
-        memberCases.push(c);
-      }
-    }
-    filtered = memberCases;
-  }
+  const isSystemAdmin = req.user!.roles.includes('SYSTEM ADMIN');
+  const filtered = await db.getCasesForUser(req.user!.id, isSystemAdmin, { status, search });
 
   return res.status(200).json({ cases: filtered });
 });
@@ -158,7 +135,10 @@ router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req
  * Get Evidence List for a Case Scope
  */
 router.get('/:case_id/evidence', AuthMiddleware.requireCaseAccess, async (req: AuthenticatedRequest, res: Response) => {
-  const list = await db.getEvidenceByCase(req.params.case_id);
+  const list = await db.getAuthorizedEvidenceByCase(
+    { user_id: req.user!.id, clearance_level: req.user!.clearance_level, roles: req.user!.roles },
+    req.params.case_id
+  );
   return res.status(200).json({ case_id: req.params.case_id, evidence: list });
 });
 

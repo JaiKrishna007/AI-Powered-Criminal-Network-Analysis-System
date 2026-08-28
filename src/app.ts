@@ -74,8 +74,9 @@ app.get('/api/me', AuthMiddleware.requireAuth, async (req: AuthenticatedRequest,
     if (!user) {
       return res.status(404).json({ error: 'USER_NOT_FOUND', message: 'Current user not found' });
     }
+    const roles = await db.getUserRoles(user.id);
     const { password_hash, ...safeUser } = user as any;
-    return res.status(200).json(safeUser);
+    return res.status(200).json({ ...safeUser, roles });
   } catch (err: any) {
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
