@@ -1,7 +1,7 @@
 // Ollama Integration for D3 Agent Copilot
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'mistral';
+const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:4b';
 
 interface OllamaMessage {
   role: 'system' | 'user' | 'assistant';

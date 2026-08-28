@@ -41,14 +41,14 @@ async function checkQdrantCollection(collectionName: string) {
 async function main() {
   console.log("--- D3 RAG DIAGNOSTIC CHECK ---");
   
-  // 1. Check Mistral (Generation Model) embedding dimension
-  console.log("\nChecking 'mistral' model...");
-  const mistralDim = await getEmbeddingDimension('mistral');
-  console.log(`Mistral Embedding Dimension: ${mistralDim || 'Failed (Not pulled yet?)'}`);
+  // 1. Check Qwen (Generation Model) embedding dimension
+  console.log("\nChecking 'qwen2.5:4b' model...");
+  const mistralDim = await getEmbeddingDimension('qwen2.5:4b');
+  console.log(`Qwen Embedding Dimension: ${mistralDim || 'Failed (Not pulled yet?)'}`);
 
   // 2. Check Nomic-Embed-Text (Dedicated Embedding Model) dimension
-  console.log("\nChecking 'nomic-embed-text' model...");
-  const nomicDim = await getEmbeddingDimension('nomic-embed-text');
+  console.log("\nChecking 'multilingual-e5-small' model...");
+  const nomicDim = await getEmbeddingDimension('multilingual-e5-small');
   console.log(`Nomic-Embed-Text Embedding Dimension: ${nomicDim || 'Failed (Not pulled yet?)'}`);
   
   // 3. Check Qdrant Config

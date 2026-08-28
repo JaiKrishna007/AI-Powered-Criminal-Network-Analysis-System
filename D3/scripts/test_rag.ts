@@ -7,7 +7,7 @@ import crypto from 'crypto';
 async function main() {
   console.log("=== EXECUTING REAL END-TO-END RAG TEST ===");
   
-  // Wait for Mistral if needed
+  // Wait for Qwen if needed
   // Setup
   const qdrant = getQdrantClient();
   let collectionExists = false;
@@ -40,7 +40,7 @@ async function main() {
   // Embedding
   const points = [];
   for (let i = 0; i < chunks.length; i++) {
-    const embedding = await generateEmbedding(chunks[i], 'nomic-embed-text');
+    const embedding = await generateEmbedding(chunks[i], 'multilingual-e5-small');
     points.push({
       id: uuidv4(),
       vector: embedding,
@@ -49,7 +49,7 @@ async function main() {
         case_id: testCaseId,
         source_ref: "doc_001",
         chunk_ref: `chunk_${i}`,
-        model_version: 'nomic-embed-text',
+        model_version: 'multilingual-e5-small',
         classification: testClassification,
         text: chunks[i]
       }
@@ -64,7 +64,7 @@ async function main() {
 
   // 2. Retrieval Phase
   const userQuery = "Did Alice transfer money to the Cayman Islands?";
-  const queryEmbedding = await generateEmbedding(userQuery, 'nomic-embed-text');
+  const queryEmbedding = await generateEmbedding(userQuery, 'multilingual-e5-small');
   
   const searchResults = await qdrant.search('evidence', {
     vector: queryEmbedding,
@@ -131,7 +131,7 @@ async function main() {
   
   // Execute AI-T02: No supporting evidence
   const queryNoEv = "Did Alice buy a Ferrari?";
-  const qNoEv = await generateEmbedding(queryNoEv, 'nomic-embed-text');
+  const qNoEv = await generateEmbedding(queryNoEv, 'multilingual-e5-small');
   const resNoEv = await qdrant.search('evidence', { 
     vector: qNoEv, 
     limit: 3, 

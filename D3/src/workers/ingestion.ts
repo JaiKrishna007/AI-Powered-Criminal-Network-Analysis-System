@@ -76,7 +76,16 @@ const worker = new Worker('ingestion', async (job: Job) => {
       const embedding = await generateEmbedding(chunkText, 'multilingual-e5-small');
       
       const chunkHash = crypto.createHash('sha256').update(chunkText).digest('hex');
-      const pointId = uuidv4();
+      
+      const chunkRef = `chunk_${i}`;
+      const hashStr = crypto.createHash('md5').update(`${caseId}-${evidenceId}-${chunkRef}`).digest('hex');
+      const pointId = [
+        hashStr.slice(0, 8),
+        hashStr.slice(8, 12),
+        '4' + hashStr.slice(13, 16),
+        '8' + hashStr.slice(17, 20),
+        hashStr.slice(20, 32)
+      ].join('-');
 
       points.push({
         id: pointId,
@@ -85,7 +94,7 @@ const worker = new Worker('ingestion', async (job: Job) => {
           vector_id: pointId,
           case_id: caseId,
           source_ref: evidenceId,
-          chunk_ref: `chunk_${i}`,
+          chunk_ref: chunkRef,
           model_version: 'multilingual-e5-small-v1',
           text_hash: chunkHash,
           text: chunkText
