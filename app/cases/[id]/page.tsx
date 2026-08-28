@@ -409,39 +409,39 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-950">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F4F6F9]">
               
               {/* Search Results Display (FE-01) */}
               {searchResults ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                    <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">
+                <div className="space-y-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
                       Search results for "{searchResults.query}"
                     </h3>
                     <button 
                       onClick={() => setSearchResults(null)}
-                      className="text-xs text-zinc-500 hover:text-zinc-300"
+                      className="text-xs text-slate-500 hover:text-slate-700 font-bold"
                     >
                       Clear Search
                     </button>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Matched Entities */}
-                    <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-850">
-                      <h4 className="text-xs font-bold text-zinc-300 mb-3">Matched Entities ({searchResults.entities?.length || 0})</h4>
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                      <h4 className="text-xs font-bold text-slate-700 mb-3">Matched Entities ({searchResults.entities?.length || 0})</h4>
                       {searchResults.entities?.length === 0 ? (
-                        <p className="text-xs text-zinc-500 italic">No entities match query.</p>
+                        <p className="text-xs text-slate-500 italic">No entities match query.</p>
                       ) : (
                         <div className="space-y-2">
                           {searchResults.entities.map((e: Entity) => (
                             <button
                               key={e.id}
                               onClick={() => handleFocusEntityId(e.id)}
-                              className="w-full flex items-center justify-between p-2.5 rounded bg-zinc-950 border border-zinc-900 hover:border-zinc-850 text-left transition"
+                              className="w-full flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-200 hover:border-slate-350 text-left transition shadow-sm"
                             >
-                              <span className="text-xs font-bold text-zinc-200">{e.canonical_name}</span>
-                              <span className="text-[9px] text-zinc-500 font-mono tracking-widest uppercase">{e.type}</span>
+                              <span className="text-xs font-bold text-slate-700">{e.canonical_name}</span>
+                              <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{e.type}</span>
                             </button>
                           ))}
                         </div>
@@ -449,10 +449,10 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                     </div>
 
                     {/* Matched Evidence */}
-                    <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-850">
-                      <h4 className="text-xs font-bold text-zinc-300 mb-3">Matched Evidence ({searchResults.evidence?.length || 0})</h4>
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                      <h4 className="text-xs font-bold text-slate-700 mb-3">Matched Evidence ({searchResults.evidence?.length || 0})</h4>
                       {searchResults.evidence?.length === 0 ? (
-                        <p className="text-xs text-zinc-500 italic">No evidence artifacts match query.</p>
+                        <p className="text-xs text-slate-500 italic">No evidence artifacts match query.</p>
                       ) : (
                         <div className="space-y-2">
                           {searchResults.evidence.map((e: any) => (
@@ -461,13 +461,13 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                               onClick={() => {
                                 handleSelectEvidenceId(e.id);
                               }}
-                              className="w-full flex flex-col gap-1 p-2.5 rounded bg-zinc-950 border border-zinc-900 hover:border-zinc-850 text-left transition"
+                              className="w-full flex flex-col gap-1 p-2.5 rounded-lg bg-white border border-slate-200 hover:border-slate-350 text-left transition shadow-sm"
                             >
-                              <div className="flex items-center justify-between text-xs font-bold text-zinc-200">
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                                 <span>{e.id}</span>
-                                <span className="text-[8px] bg-zinc-900 border border-zinc-800 text-zinc-500 px-1 rounded">{e.source_type}</span>
+                                <span className="text-[8px] bg-slate-100 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold">{e.source_type}</span>
                               </div>
-                              <p className="text-[10px] text-zinc-500 truncate">{e.content}</p>
+                              <p className="text-[10px] text-slate-500 truncate mt-1">{e.content}</p>
                             </button>
                           ))}
                         </div>
@@ -478,17 +478,53 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
               ) : (
                 /* Default Case Overview */
                 <div className="space-y-6">
-                  {/* Case brief header card */}
+                  
+                  {/* Top compact KPI Metrics Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    {/* KPI 1 */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Case Status</span>
+                      <span className={`text-xs font-bold flex items-center gap-1.5 ${
+                        caseObj?.status === 'ACTIVE' ? 'text-emerald-700' : caseObj?.status === 'CLOSED' ? 'text-amber-700' : 'text-slate-500'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${
+                          caseObj?.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' : caseObj?.status === 'CLOSED' ? 'bg-amber-500' : 'bg-slate-400'
+                        }`}></span>
+                        {caseObj?.status || 'UNKNOWN'}
+                      </span>
+                    </div>
+                    {/* KPI 2 */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest font-sans">Flagged Leads</span>
+                      <span className="text-sm font-extrabold text-slate-700 font-mono">
+                        {leads.filter(l => l.priority === 'HIGH').length} / {leads.length}
+                      </span>
+                    </div>
+                    {/* KPI 3 */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Resolved Entities</span>
+                      <span className="text-sm font-extrabold text-slate-700 font-mono">
+                        {caseObj?.entity_count || 0}
+                      </span>
+                    </div>
+                    {/* KPI 4 */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Evidence Records</span>
+                      <span className="text-sm font-extrabold text-slate-700 font-mono">
+                        {caseObj?.evidence_count || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Case brief header card / Context Card */}
                   {caseObj && (
-                    <div className="p-6 rounded-2xl glass-panel border border-zinc-800 flex flex-col gap-4 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 blur-3xl rounded-full"></div>
-                      
-                      <div className="flex justify-between items-start z-10">
+                    <div className="p-6 rounded-xl bg-white border border-slate-200 flex flex-col gap-4 relative overflow-hidden shadow-sm">
+                      <div className="flex justify-between items-start">
                         <div>
-                          <span className="text-[9px] font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-widest">
+                          <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded uppercase tracking-widest">
                             {caseObj.classification.replace('_', ' ')}
                           </span>
-                          <h2 className="text-2xl font-black text-zinc-100 tracking-wide mt-3">
+                          <h2 className="text-lg font-black text-slate-800 tracking-wide mt-3">
                             {caseObj.title}
                           </h2>
                         </div>
@@ -498,37 +534,37 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                             setSettingsSuccess(false);
                             setShowSettings(!showSettings);
                           }}
-                          className="px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-bold transition shadow-sm z-20"
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 text-xs font-bold transition shadow-sm"
                         >
                           {showSettings ? 'Hide Settings' : 'Case Settings'}
                         </button>
                       </div>
 
-                      <div className="z-10">
-                        <p className="text-xs text-zinc-400 leading-relaxed max-w-3xl">
+                      <div>
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-3xl">
                           {caseObj.description || 'No description provided.'}
                         </p>
                       </div>
 
                       {showSettings && (
-                        <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/40 space-y-4 text-xs z-10">
+                        <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-4 text-xs">
                           <div className="space-y-1">
-                            <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                               Workspace Management Settings
                             </h3>
-                            <p className="text-[10px] text-zinc-500">
+                            <p className="text-[10px] text-slate-400">
                               Edit case title, classification, or transition workspace status.
                             </p>
                           </div>
                           
                           {settingsError && (
-                            <div className="p-2.5 rounded bg-red-950/40 border border-red-900/40 text-red-400 text-[10px] font-bold">
+                            <div className="p-2.5 rounded bg-red-50 border border-red-200 text-red-700 text-[10px] font-bold">
                               {settingsError}
                             </div>
                           )}
 
                           {settingsSuccess && (
-                            <div className="p-2.5 rounded bg-emerald-950/40 border border-emerald-900/40 text-emerald-400 text-[10px] font-bold">
+                            <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
                               Case settings updated successfully.
                             </div>
                           )}
@@ -536,24 +572,24 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {/* Title edit */}
                             <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-zinc-400 uppercase">Case Title</label>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Case Title</label>
                               <input
                                 type="text"
                                 value={editTitle}
                                 onChange={(e) => setEditTitle(e.target.value)}
                                 disabled={caseObj.status !== 'ACTIVE'}
-                                className="w-full px-3 py-2 rounded bg-zinc-900/60 border border-zinc-850 text-zinc-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                                className="w-full px-3 py-2 rounded bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-blue-500 disabled:opacity-50"
                               />
                             </div>
 
                             {/* Classification edit */}
                             <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-zinc-400 uppercase">Classification</label>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Classification</label>
                               <select
                                 value={editClassification}
                                 onChange={(e) => setEditClassification(e.target.value as any)}
                                 disabled={caseObj.status !== 'ACTIVE'}
-                                className="w-full px-3 py-2 rounded bg-zinc-900/60 border border-zinc-850 text-zinc-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                                className="w-full px-3 py-2 rounded bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-blue-500 disabled:opacity-50"
                               >
                                 <option value="PUBLIC">PUBLIC</option>
                                 <option value="CASE_RESTRICTED">CASE RESTRICTED</option>
@@ -564,13 +600,13 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                           </div>
 
                           {/* Lifecycle action buttons */}
-                          <div className="flex items-center justify-between pt-3 border-t border-zinc-850">
+                          <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                             <div className="flex gap-2">
                               {caseObj.status === 'ACTIVE' && (
                                 <button
                                   type="button"
                                   onClick={handleCloseCase}
-                                  className="px-3.5 py-1.5 rounded-lg bg-amber-600/10 border border-amber-500/20 hover:bg-amber-600/25 text-amber-400 font-bold text-[10px] transition"
+                                  className="px-3.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 font-bold text-[10px] transition"
                                 >
                                   Close Workspace
                                 </button>
@@ -580,14 +616,14 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                                 <button
                                   type="button"
                                   onClick={handleArchiveCase}
-                                  className="px-3.5 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/20 hover:bg-indigo-600/25 text-indigo-400 font-bold text-[10px] transition"
+                                  className="px-3.5 py-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 font-bold text-[10px] transition"
                                 >
                                   Archive Case
                                 </button>
                               )}
 
                               {caseObj.status === 'ARCHIVED' && (
-                                <span className="text-[10px] italic text-zinc-500 font-bold">
+                                <span className="text-[10px] italic text-slate-400 font-bold">
                                   Workspace is archived and read-only.
                                 </span>
                               )}
@@ -597,7 +633,7 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                               <button
                                 type="button"
                                 onClick={handleSaveChanges}
-                                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] transition shadow-md shadow-indigo-600/10"
+                                className="px-4 py-1.5 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-[10px] transition shadow-sm"
                               >
                                 Save Changes
                               </button>
@@ -606,77 +642,74 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                         </div>
                       )}
                       
-                      {/* Case stats metadata strip */}
-                      <div className="grid grid-cols-4 gap-4 border-t border-zinc-850 pt-4 mt-2">
-                        <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-900/80 flex flex-col gap-1.5 text-xs">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Workspace State</span>
-                          <span className="font-bold text-emerald-400 flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            {caseObj.status}
-                          </span>
+                      {/* Compact Case Context Details panel details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 border-t border-slate-100 pt-4 mt-2">
+                        <div className="flex flex-col gap-0.5 text-xs">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Case Identifier</span>
+                          <span className="font-bold text-slate-700 font-mono">{caseObj.id}</span>
                         </div>
-                        <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-900/80 flex flex-col gap-1.5 text-xs">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Resolved Entities</span>
-                          <span className="font-bold text-zinc-200 font-mono">{caseObj.entity_count}</span>
+                        <div className="flex flex-col gap-0.5 text-xs">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Classification</span>
+                          <span className="font-bold text-blue-700">{caseObj.classification.replace('_', ' ')}</span>
                         </div>
-                        <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-900/80 flex flex-col gap-1.5 text-xs">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Identified Links</span>
-                          <span className="font-bold text-zinc-200 font-mono">{caseObj.relationship_count}</span>
+                        <div className="flex flex-col gap-0.5 text-xs">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Created Date</span>
+                          <span className="font-bold text-slate-600 font-mono">2026-08-10 UTC</span>
                         </div>
-                        <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-900/80 flex flex-col gap-1.5 text-xs">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Evidence Index</span>
-                          <span className="font-bold text-zinc-200 font-mono">{caseObj.evidence_count}</span>
+                        <div className="flex flex-col gap-0.5 text-xs">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Lead Investigators</span>
+                          <span className="font-bold text-slate-600">Arash (USR-201)</span>
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* Entity Resolution Queue (FE-T03 / FE-07) */}
-                  <div className="p-5 rounded-2xl glass-panel border border-zinc-800/80 flex flex-col gap-4">
-                    <div className="flex items-center gap-2 border-b border-zinc-850 pb-2">
-                      <GitCompare size={16} className="text-indigo-400 animate-pulse" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                  <div className="p-5 rounded-xl bg-white border border-slate-200 flex flex-col gap-4 shadow-sm">
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <GitCompare size={16} className="text-blue-500" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                         Entity Resolution Verification Queue ({resolutions.filter((r) => r.status === 'CANDIDATE').length})
                       </h3>
                     </div>
 
                     {resolutions.filter((r) => r.status === 'CANDIDATE').length === 0 ? (
-                      <p className="text-xs text-zinc-500 italic">No candidates awaiting review.</p>
+                      <p className="text-xs text-slate-400 italic">No candidates awaiting review.</p>
                     ) : (
                       <div className="space-y-4">
                         {resolutions.filter((r) => r.status === 'CANDIDATE').map((res) => (
                           <div 
                             key={res.id}
-                            className="p-4 rounded-xl bg-zinc-950 border border-zinc-850 flex flex-col gap-3.5 text-xs"
+                            className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3.5 text-xs"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-bold text-indigo-400 uppercase bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded">
+                              <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded font-bold">
                                 Similarity Confidence: {Math.round(res.confidence * 100)}%
                               </span>
-                              <span className="text-[8px] font-mono text-zinc-500">ID: {res.id}</span>
+                              <span className="text-[8px] font-mono text-slate-400">ID: {res.id}</span>
                             </div>
 
                             {/* Candidate Names comparison */}
-                            <div className="flex items-center gap-6 justify-center py-2 border-y border-zinc-900 bg-zinc-900/10">
+                            <div className="flex items-center gap-6 justify-center py-2 border-y border-slate-200 bg-white rounded-lg">
                               <div className="text-center w-36">
-                                <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">Canonical Profile</p>
-                                <p className="font-bold text-zinc-200 mt-1">{res.original.canonical_name}</p>
-                                <p className="text-[8px] text-zinc-500 font-mono mt-0.5">ID: {res.original.id}</p>
+                                <p className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Canonical Profile</p>
+                                <p className="font-bold text-slate-800 mt-1">{res.original.canonical_name}</p>
+                                <p className="text-[8px] text-slate-400 font-mono mt-0.5">ID: {res.original.id}</p>
                               </div>
-                              <div className="px-3.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-bold text-zinc-400">
+                              <div className="px-3.5 py-1 rounded bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-500">
                                 Match?
                               </div>
                               <div className="text-center w-36">
-                                <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">Extracted Candidate</p>
-                                <p className="font-bold text-indigo-400 mt-1">{res.candidate.canonical_name}</p>
-                                <p className="text-[8px] text-zinc-500 font-mono mt-0.5">aka: {res.candidate.aliases.join(', ')}</p>
+                                <p className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Extracted Candidate</p>
+                                <p className="font-bold text-blue-600 mt-1">{res.candidate.canonical_name}</p>
+                                <p className="text-[8px] text-slate-400 font-mono mt-0.5">aka: {res.candidate.aliases.join(', ')}</p>
                               </div>
                             </div>
 
                             {/* Contributing signals lists */}
                             <div className="space-y-1">
-                              <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Similarity Rationale:</p>
-                              <ul className="list-disc pl-4 text-[10px] text-zinc-500 space-y-0.5">
+                              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Similarity Rationale:</p>
+                              <ul className="list-disc pl-4 text-[10px] text-slate-500 space-y-0.5">
                                 {res.reasons.map((reason: string, i: number) => (
                                   <li key={i} className="leading-snug">{reason}</li>
                                 ))}
@@ -684,16 +717,16 @@ export default function CaseWorkspacePage({ params }: { params: { id: string } }
                             </div>
 
                             {/* Actions review buttons */}
-                            <div className="flex justify-end gap-2.5 pt-2 border-t border-zinc-900">
+                            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-200">
                               <button
                                 onClick={() => handleResolutionDecision(res.id, 'REJECTED')}
-                                className="px-3.5 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 font-bold transition"
+                                className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-500 font-bold transition text-[10px]"
                               >
                                 Reject Merge
                               </button>
                               <button
                                 onClick={() => handleResolutionDecision(res.id, 'ACCEPTED')}
-                                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition shadow-md shadow-indigo-600/10"
+                                className="px-3.5 py-1.5 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white font-bold transition shadow-sm text-[10px]"
                               >
                                 Approve Merge
                               </button>

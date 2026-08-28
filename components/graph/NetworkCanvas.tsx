@@ -10,8 +10,7 @@ import ReactFlow, {
   useEdgesState,
   Handle,
   Position,
-  NodeProps,
-  EdgeLabelRenderer
+  NodeProps
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -22,12 +21,11 @@ import {
   MapPin, 
   AlertTriangle,
   Fingerprint,
-  CaseSensitive,
   CalendarDays
 } from 'lucide-react';
 import { Entity, Relationship } from '@/lib/client-contracts/contracts';
 
-// Custom Node Styling based on Entity Type (XAI visuals - FE-02)
+// Custom Node Styling based on Entity Type (Light Theme Corporate UI - FE-02)
 const CustomNodeComponent = ({ data }: NodeProps<{ entity: Entity; isSelected?: boolean }>) => {
   const entity = data.entity;
   const isSelected = data.isSelected;
@@ -35,43 +33,43 @@ const CustomNodeComponent = ({ data }: NodeProps<{ entity: Entity; isSelected?: 
   const config = useMemo(() => {
     switch (entity.type) {
       case 'PERSON':
-        return { icon: User, color: 'text-indigo-400', bg: 'bg-indigo-950/40', border: 'border-indigo-500/50' };
-      case 'PHONE':
-        return { icon: Phone, color: 'text-cyan-400', bg: 'bg-cyan-950/40', border: 'border-cyan-500/50' };
-      case 'BANK_ACCOUNT':
-        return { icon: Coins, color: 'text-emerald-400', bg: 'bg-emerald-950/40', border: 'border-emerald-500/50' };
-      case 'VEHICLE':
-        return { icon: Car, color: 'text-amber-400', bg: 'bg-amber-950/40', border: 'border-amber-500/50' };
+        return { icon: User, color: 'text-blue-600 bg-blue-50/50', border: 'border-blue-200' };
+      case 'ORGANIZATION':
+        return { icon: Fingerprint, color: 'text-purple-600 bg-purple-50/50', border: 'border-purple-200' };
       case 'LOCATION':
-        return { icon: MapPin, color: 'text-rose-400', bg: 'bg-rose-950/40', border: 'border-rose-500/50' };
-      case 'EVENT':
-        return { icon: CalendarDays, color: 'text-violet-400', bg: 'bg-violet-950/40', border: 'border-violet-500/50' };
+        return { icon: MapPin, color: 'text-teal-600 bg-teal-50/50', border: 'border-teal-200' };
+      case 'VEHICLE':
+        return { icon: Car, color: 'text-orange-600 bg-orange-50/50', border: 'border-orange-200' };
+      case 'BANK_ACCOUNT':
+        return { icon: Coins, color: 'text-yellow-600 bg-yellow-50/50', border: 'border-yellow-250' };
+      case 'PHONE':
+        return { icon: Phone, color: 'text-cyan-600 bg-cyan-50/50', border: 'border-cyan-200' };
       default:
-        return { icon: Fingerprint, color: 'text-zinc-400', bg: 'bg-zinc-900/40', border: 'border-zinc-700/50' };
+        return { icon: Fingerprint, color: 'text-slate-600 bg-slate-50/50', border: 'border-slate-200' };
     }
   }, [entity.type]);
 
   const Icon = config.icon;
 
   return (
-    <div className={`p-3 rounded-xl glass-card flex items-center gap-3 w-56 text-left relative ${config.bg} ${config.border} ${
-      isSelected ? 'ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/25 border-indigo-400' : ''
+    <div className={`p-3 rounded-lg border bg-white shadow-sm flex items-center gap-3 w-56 text-left relative border-slate-200 ${
+      isSelected ? 'ring-1 ring-[#0891B2] shadow-[0_0_12px_rgba(8,145,178,0.22)] border-[#0891B2]' : ''
     }`}>
       {/* React Flow Source/Target Handles */}
       <Handle type="target" position={Position.Top} className="opacity-0" />
       <Handle type="source" position={Position.Bottom} className="opacity-0" />
 
       {/* Node Icon */}
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-zinc-950 border border-zinc-800 shrink-0`}>
-        <Icon size={18} className={config.color} />
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shrink-0 bg-white ${config.border}`}>
+        <Icon size={16} className={config.color} />
       </div>
 
       {/* Node Details */}
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold text-zinc-100 truncate">{entity.canonical_name}</p>
-        <p className="text-[9px] text-zinc-400 font-semibold tracking-wider uppercase">{entity.type.replace('_', ' ')}</p>
+        <p className="text-xs font-bold text-slate-800 truncate">{entity.canonical_name}</p>
+        <p className="text-[8px] text-slate-400 font-bold tracking-wider uppercase">{entity.type.replace('_', ' ')}</p>
         {entity.aliases && entity.aliases.length > 0 && (
-          <p className="text-[8px] text-zinc-500 italic truncate mt-0.5">
+          <p className="text-[8px] text-slate-500 italic truncate mt-0.5">
             aka: {entity.aliases.join(', ')}
           </p>
         )}
@@ -79,7 +77,7 @@ const CustomNodeComponent = ({ data }: NodeProps<{ entity: Entity; isSelected?: 
 
       {/* Confidence Badge */}
       {entity.confidence < 1.0 && (
-        <div className="absolute -top-2 -right-2 bg-zinc-950 border border-zinc-800 text-[8px] font-bold text-indigo-400 px-1.5 py-0.5 rounded-full">
+        <div className="absolute -top-2 -right-2 bg-white border border-slate-200 text-[8px] font-bold text-slate-500 px-1.5 py-0.5 rounded-full shadow-sm">
           {Math.round(entity.confidence * 100)}%
         </div>
       )}
@@ -158,20 +156,21 @@ export default function NetworkCanvas({
         animated: isHighlighted,
         selected: isSelected,
         style: {
-          stroke: isSelected ? '#818cf8' : isHighlighted ? '#a78bfa' : 'rgba(255, 255, 255, 0.25)',
-          strokeWidth: isSelected ? 3 : isHighlighted ? 2.5 : 1.5,
+          stroke: isSelected ? '#2563EB' : isHighlighted ? '#6366F1' : '#94A3B8',
+          strokeWidth: isSelected ? 2.5 : isHighlighted ? 2 : 1.25,
         },
         labelStyle: {
-          fill: '#a1a1aa',
-          fontSize: 9,
-          fontWeight: 600,
+          fill: '#475569',
+          fontSize: 8,
+          fontWeight: 700,
         },
         labelBgPadding: [4, 2],
         labelBgBorderRadius: 4,
         labelBgStyle: {
-          fill: '#18181b',
-          fillOpacity: 0.9,
-          stroke: 'rgba(255, 255, 255, 0.08)'
+          fill: '#FFFFFF',
+          fillOpacity: 0.95,
+          stroke: '#E2E8F0',
+          strokeWidth: 1
         }
       };
     });
@@ -202,12 +201,12 @@ export default function NetworkCanvas({
   };
 
   return (
-    <div className="w-full h-full relative bg-zinc-950">
+    <div className="w-full h-full relative bg-[#F8FAFC] border border-slate-200 rounded-xl overflow-hidden">
       {/* Graph Truncation indicator warning (FE-02) */}
       {truncated && (
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-900/50 text-amber-400 text-xs font-semibold backdrop-blur-md">
-          <AlertTriangle size={14} className="shrink-0" />
-          <span>Graph Bounded: Traversal limit reached. Double-click a node to expand.</span>
+        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold shadow-sm">
+          <AlertTriangle size={14} className="shrink-0 text-amber-600" />
+          <span>Graph bounded — expand a node to investigate further.</span>
         </div>
       )}
 
@@ -226,7 +225,7 @@ export default function NetworkCanvas({
         className="w-full h-full"
       >
         <Controls showInteractive={false} className="z-10" />
-        <Background color="#27272a" gap={20} size={1} />
+        <Background color="#cbd5e1" gap={20} size={1} />
       </ReactFlow>
     </div>
   );
