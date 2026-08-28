@@ -79,7 +79,7 @@ export class ControlPlaneDB {
 
   private async setupIndexes() {
     if (!this.db) return;
-    const collections = ['users', 'roles', 'cases', 'case_members', 'evidence', 'ingestion_jobs', 'entity_review', 'audit_event_ref'];
+    const collections = ['users', 'roles', 'cases', 'case_members', 'evidence', 'ingestion_jobs', 'entity_review', 'audit_event_ref', 'reports'];
     for (const coll of collections) {
       // Ensure collections exist to avoid "ns does not exist" errors
       const collinfo = await this.db.listCollections({ name: coll }).toArray();
@@ -91,11 +91,13 @@ export class ControlPlaneDB {
     await this.db.collection('users').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('roles').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('cases').createIndex({ id: 1 }, { unique: true });
-    await this.db.collection('evidence').createIndex({ sha256: 1 });
-    await this.db.collection('evidence').createIndex({ case_id: 1, classification: 1 });
+    await this.db.collection('case_members').createIndex({ case_id: 1, user_id: 1 }, { unique: true });
+    await this.db.collection('evidence').createIndex({ case_id: 1, sha256: 1 }, { unique: true });
     await this.db.collection('ingestion_jobs').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('entity_review').createIndex({ candidate_id: 1 }, { unique: true });
     await this.db.collection('audit_event_ref').createIndex({ event_id: 1 }, { unique: true });
+    await this.db.collection('reports').createIndex({ id: 1 }, { unique: true });
+    await this.db.collection('reports').createIndex({ case_id: 1, version: 1 }, { unique: true });
   }
 
   private async seedRoles() {
@@ -266,10 +268,20 @@ export class ControlPlaneDB {
       : memberOrCaseId;
 
     if (this.isTestEnv) {
-      this.testCaseMembers.push(member);
+      const idx = this.testCaseMembers.findIndex(cm => cm.case_id === member.case_id && cm.user_id === member.user_id);
+      if (idx >= 0) {
+        this.testCaseMembers[idx] = member;
+      } else {
+        this.testCaseMembers.push(member);
+      }
       return member;
     }
-    await this.getCollection('case_members').insertOne({ ...member });
+
+    await this.getCollection('case_members').updateOne(
+      { case_id: member.case_id, user_id: member.user_id },
+      { $set: member },
+      { upsert: true }
+    );
     return member;
   }
 
@@ -590,11 +602,29 @@ export class ControlPlaneDB {
   public async createReport(report: any): Promise<any> {
     if (this.isTestEnv) {
       if (!this.testReports) this.testReports = new Map();
+      const existingVersion = Array.from(this.testReports.values()).find((r: any) => r.case_id === report.case_id && r.version === report.version);
+      if (existingVersion && existingVersion.id !== report.id) {
+        const err: any = new Error(`Duplicate report version v${report.version} for case ${report.case_id}`);
+        err.code = 11000;
+        throw err;
+      }
       this.testReports.set(report.id, report);
       return report;
     }
     await this.getCollection('reports').insertOne({ ...report });
     return report;
+  }
+
+  public async getReportsByCase(case_id: string): Promise<any[]> {
+    if (this.isTestEnv) {
+      if (!this.testReports) this.testReports = new Map();
+      return Array.from(this.testReports.values()).filter((r: any) => r.case_id === case_id);
+    }
+    const res = await this.getCollection('reports').find({ case_id }).toArray();
+    return res.map(row => {
+      const { _id, ...rep } = row;
+      return rep;
+    });
   }
 
   public async getReport(id: string): Promise<any> {
