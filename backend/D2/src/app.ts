@@ -40,7 +40,16 @@ if (process.env.NODE_ENV === 'production') {
     const { RedisStore } = require('connect-redis');
     const Redis = require('ioredis');
     const redisClient = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 3 });
-    sessionStore = new RedisStore({ client: redisClient, prefix: 'sess:' });
+    const clientAdapter = {
+      get: (k: string) => redisClient.get(k),
+      set: (k: string, v: string, opts: any) => {
+        const ttl = opts?.expiration?.value;
+        return ttl ? redisClient.set(k, v, 'EX', ttl) : redisClient.set(k, v);
+      },
+      del: (keys: string | string[]) => redisClient.del(...(Array.isArray(keys) ? keys : [keys])),
+      expire: (k: string, ttl: number) => redisClient.expire(k, ttl)
+    };
+    sessionStore = new RedisStore({ client: clientAdapter, prefix: 'sess:' });
   } catch (err: any) {
     throw new Error(`FATAL: Failed to initialize Redis session store in production: ${err.message}`);
   }
@@ -49,7 +58,16 @@ if (process.env.NODE_ENV === 'production') {
     const { RedisStore } = require('connect-redis');
     const Redis = require('ioredis');
     const redisClient = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 3 });
-    sessionStore = new RedisStore({ client: redisClient, prefix: 'sess:' });
+    const clientAdapter = {
+      get: (k: string) => redisClient.get(k),
+      set: (k: string, v: string, opts: any) => {
+        const ttl = opts?.expiration?.value;
+        return ttl ? redisClient.set(k, v, 'EX', ttl) : redisClient.set(k, v);
+      },
+      del: (keys: string | string[]) => redisClient.del(...(Array.isArray(keys) ? keys : [keys])),
+      expire: (k: string, ttl: number) => redisClient.expire(k, ttl)
+    };
+    sessionStore = new RedisStore({ client: clientAdapter, prefix: 'sess:' });
   } catch (err: any) {
     console.warn(`Redis session store initialization warning: ${err.message}. Using fallback.`);
   }
@@ -63,7 +81,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
     maxAge: 86400000 // 24 hours
   }
 }));

@@ -155,6 +155,7 @@ export class ControlPlaneDB {
 
     const demoUsers: Array<{ id: string, username: string, display_name: string, status: 'ACTIVE' | 'DISABLED' | 'INACTIVE' | 'SUSPENDED', clearance_level: number, role: string }> = [
       { id: 'USR-INV-001', username: 'investigator1', display_name: 'investigator1', status: 'ACTIVE', clearance_level: 2, role: 'INVESTIGATOR' },
+      { id: 'USR-INV-002', username: 'investigator', display_name: 'investigator', status: 'ACTIVE', clearance_level: 3, role: 'INVESTIGATOR' },
       { id: 'USR-SUP-001', username: 'supervisor1', display_name: 'supervisor1', status: 'ACTIVE', clearance_level: 3, role: 'SUPERVISOR' },
       { id: 'USR-ADM-001', username: 'admin1', display_name: 'admin1', status: 'ACTIVE', clearance_level: 4, role: 'SYSTEM ADMIN' }
     ];

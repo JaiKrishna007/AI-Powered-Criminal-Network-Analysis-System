@@ -23,6 +23,7 @@ export async function seedDemoDataset(): Promise<void> {
   // 1. Seed Users
   const users: Array<{ id: string, display_name: string, status: 'ACTIVE' | 'DISABLED' | 'INACTIVE' | 'SUSPENDED', clearance_level: number, role: string }> = [
     { id: 'USR-INV-001', display_name: 'investigator1', status: 'ACTIVE', clearance_level: 3, role: 'INVESTIGATOR' },
+    { id: 'USR-INV-002', display_name: 'investigator', status: 'ACTIVE', clearance_level: 3, role: 'INVESTIGATOR' },
     { id: 'USR-SUP-001', display_name: 'supervisor1', status: 'ACTIVE', clearance_level: 3, role: 'SUPERVISOR' },
     { id: 'USR-ADM-001', display_name: 'admin1', status: 'ACTIVE', clearance_level: 4, role: 'SYSTEM ADMIN' }
   ];

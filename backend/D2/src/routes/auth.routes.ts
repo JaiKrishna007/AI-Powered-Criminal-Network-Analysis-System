@@ -39,7 +39,12 @@ router.post('/login', async (req, res) => {
   // Audit Login
   await AuditMiddleware.logAction(user.id, 'LOGIN');
 
-  return res.json({ message: 'Login successful', userId: user.id });
+  return req.session.save((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to persist session.' });
+    }
+    return res.json({ message: 'Login successful', userId: user.id });
+  });
 });
 
 router.post('/logout', async (req, res) => {
