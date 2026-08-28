@@ -17,7 +17,7 @@ export async function initQdrantCollection(collectionName: string) {
   if (!exists.exists) {
     await client.createCollection(collectionName, {
       vectors: {
-        size: 768, // Dimensions for nomic-embed-text embeddings
+        size: 384, // Dimensions for multilingual-e5-small embeddings
         distance: 'Cosine'
       }
     });

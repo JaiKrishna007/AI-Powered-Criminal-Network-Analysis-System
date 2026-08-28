@@ -48,18 +48,29 @@ const worker = new Worker('ingestion', async (job: Job) => {
     await initQdrantCollection('evidence');
     const qdrant = getQdrantClient();
 
-    // 1. Fake text extraction based on storageUri for the prototype E2E
-    // In production, use pdf-parse or tesseract on storageUri content
-    const extractedText = "This is a simulated document content. Suspect A transferred $10,000 to Suspect B on 2023-10-15 via shell company XYZ Corp. Address is 123 Main St.";
+    // 1. Read actual document content based on storageUri (Issue #5)
+    let extractedText = "";
+    try {
+      const fs = require('fs/promises');
+      // For MVP, we assume the file contains extractable text or is a txt/csv/json file. 
+      // A production implementation would dispatch to pdf-parse or tesseract based on normalizedType.
+      extractedText = await fs.readFile(storageUri, 'utf8');
+    } catch (e: any) {
+      console.warn(`Failed to read actual file at ${storageUri}:`, e.message);
+      throw new Error(`Failed to read evidence artifact: ${e.message}`);
+    }
     
-    // 2. Deterministic chunking
-    const chunks = [extractedText];
+    // 2. Deterministic chunking (Simple split for MVP)
+    const chunks = extractedText.match(/[\s\S]{1,1000}(?!\S)/g) || [extractedText];
 
     // 3. Embedding & Upsert
     const points = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunkText = chunks[i];
-      const embedding = await generateEmbedding(chunkText, 'nomic-embed-text');
+      if (!chunkText.trim()) continue;
+
+      // Target approved architecture embedding model (Issue #4)
+      const embedding = await generateEmbedding(chunkText, 'multilingual-e5-small');
       
       const chunkHash = crypto.createHash('sha256').update(chunkText).digest('hex');
       const pointId = uuidv4();
@@ -72,7 +83,7 @@ const worker = new Worker('ingestion', async (job: Job) => {
           case_id: caseId,
           source_ref: evidenceId,
           chunk_ref: `chunk_${i}`,
-          model_version: 'nomic-embed-text-v1.5',
+          model_version: 'multilingual-e5-small-v1',
           text_hash: chunkHash,
           text: chunkText
         }

@@ -27,9 +27,14 @@ export class AIClient {
     try {
       const { contextHeader, signatureHeader } = signAuthContext({
         user_id: context.user_id,
+        actor_id: context.actor_id || context.user_id,
         role: context.role,
         case_id: context.case_id,
-        access_level: context.access_level
+        allowed_case_ids: context.allowed_case_ids || [context.case_id],
+        access_level: context.access_level,
+        correlation_id: context.correlation_id || '',
+        issued_at: Date.now(),
+        expires_at: Date.now() + 60000
       });
 
       const headers: Record<string, string> = {

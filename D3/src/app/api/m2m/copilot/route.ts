@@ -8,28 +8,29 @@ import { generateEmbedding } from '@/lib/ai/ollama';
 
 export async function POST(request: Request) {
   try {
-    // 1. Verify M2M AuthContext headers
+    const authHeader = request.headers.get('x-authorization-context');
+    const signature = request.headers.get('x-authorization-signature') || '';
+
+    if (!authHeader || !signature) {
+      return NextResponse.json({ error: 'Missing M2M authorization headers' }, { status: 401 });
+    }
+
     let authContext;
     try {
-      const headersObject: Record<string, string> = {};
-      request.headers.forEach((value, key) => {
-        headersObject[key.toLowerCase()] = value;
-      });
-      authContext = extractAndVerifyAuthContext(headersObject);
+      // In D3, verifyAuthContext takes the base64 string and signature
+      const { verifyAuthContext } = require('@/lib/auth/auth_verifier');
+      const isValid = verifyAuthContext(authHeader, signature);
+      if (!isValid) throw new Error("Invalid signature");
+      authContext = JSON.parse(Buffer.from(authHeader, 'base64').toString('utf8'));
     } catch (e: any) {
       console.error("M2M Auth Error:", e.message);
-      if (e.message.startsWith('UNAUTHORIZED')) {
-        return NextResponse.json({ error: 'UNAUTHORIZED', message: e.message }, { status: 401 });
-      }
-      return NextResponse.json({ error: 'FORBIDDEN', message: e.message }, { status: 403 });
+      return NextResponse.json({ error: 'UNAUTHORIZED', message: e.message }, { status: 401 });
     }
 
     const { query, focusEntityId } = await request.json();
     if (!query) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
     }
-
-    const signature = request.headers.get('x-authorization-signature') || '';
 
     // 2. Explicit Query Routing (Intent Detection)
     const lowerQuery = query.toLowerCase();
@@ -41,13 +42,10 @@ export async function POST(request: Request) {
       if (focusEntityId) {
         try {
           if (isTemporal) {
-            // Route to D4 temporal endpoint
-            // For MVP we just use the graph endpoint, but in production we'd use temporal
-            // Since D4 temporal endpoint wasn't provided, we'll note it as delegated
             graphContext = "Temporal graph context delegated to D4. (MOCK RESPONSE FOR TEMPORAL)";
           } else {
-            // Regular semantic graph fetch
-            const subgraph = await GraphContextClient.getFocusedGraph(authContext, signature, focusEntityId, 1);
+            // Forward RAW authHeader instead of parsed authContext!
+            const subgraph = await GraphContextClient.getFocusedGraph(authHeader, signature, focusEntityId, 1);
             graphContext = JSON.stringify(subgraph);
           }
         } catch (e: any) {
@@ -66,7 +64,8 @@ export async function POST(request: Request) {
     const grounding: string[] = [];
     try {
       const qdrant = getQdrantClient();
-      const queryEmbedding = await generateEmbedding(query, 'nomic-embed-text');
+      // Target correct embedding model
+      const queryEmbedding = await generateEmbedding(query, 'multilingual-e5-small');
       
       const searchResults = await qdrant.search('evidence', {
         vector: queryEmbedding,

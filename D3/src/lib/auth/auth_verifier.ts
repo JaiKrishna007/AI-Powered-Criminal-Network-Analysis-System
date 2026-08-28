@@ -27,11 +27,8 @@ export function verifyAuthContext(contextStr: string, signatureStr: string): boo
     if (!isValid) return false;
     
     const parsed = JSON.parse(contextJson);
-    if (!parsed.expires_at || Date.now() > parsed.expires_at) {
-      // For MVP/demo, if expires_at is not present, we might let it pass or fail depending on strictness.
-      // Assuming D2 sets it. If it fails here because it wasn't set, we just check if it's expired when present.
-      if (parsed.expires_at && Date.now() > parsed.expires_at) return false;
-    }
+    if (!parsed.expires_at) return false;
+    if (Date.now() > parsed.expires_at) return false;
     
     return true;
   } catch (err) {
