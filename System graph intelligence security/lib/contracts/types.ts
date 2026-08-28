@@ -150,8 +150,6 @@ export interface AUDIT_v1 {
   outcome: AuditOutcome;
   correlation_id: string; // Request/job ID
   details: Record<string, any>; // Minimal non-sensitive metadata
-  previous_hash?: string; // SHA256 of the previous event (null for genesis block)
-  event_hash: string; // SHA256(previous_hash + canonicalized_event)
 }
 
 /**

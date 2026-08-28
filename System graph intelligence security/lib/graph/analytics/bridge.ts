@@ -167,9 +167,7 @@ export class BridgeDetector {
         description: `Entity ${candidate.id} (${candidateNode.type}) acts as a structural connector bridging distinct clusters. Score: ${candidate.bridgeScore.toFixed(3)}.`,
         target_entity_ids: [candidate.id],
         evidence_ids: evidenceIds,
-        timestamp: new Date().toISOString(),
-        // Attaching score details into a custom properties field (for internal debugging or XAI report)
-        ...( { properties: candidate.scoreDetails } as any)
+        timestamp: new Date().toISOString()
       });
     }
 

@@ -110,13 +110,7 @@ export class ReportGenerator {
       return {
         ...insight,
         title: `Explainability Details: ${insight.title}`,
-        description: `Reasoning: Node ${insight.target_entity_ids[0]} acts as an articulation point or strong bridge (Betweenness: ${properties.normalizedBetweenness?.toFixed(2) || 'N/A'}, Cross-community density: ${properties.crossCommunityDegree?.toFixed(2) || 'N/A'}). Temporal relevance: ${properties.temporalRelevance?.toFixed(2) || 'N/A'}.`,
-        // We include confidence, reasons, limitations inside properties
-        ...( { properties: {
-          confidence: properties.bridgeScore || 0,
-          limitations: "Algorithm uses MVP connected components. Cross-community density is an approximation.",
-          reasons: properties
-        } } as any )
+        description: `Reasoning: Node ${insight.target_entity_ids[0]} acts as an articulation point or strong bridge (Betweenness: ${properties.normalizedBetweenness?.toFixed(2) || 'N/A'}, Cross-community density: ${properties.crossCommunityDegree?.toFixed(2) || 'N/A'}). Temporal relevance: ${properties.temporalRelevance?.toFixed(2) || 'N/A'}. Confidence: ${properties.bridgeScore || 0}. Limitations: Algorithm uses MVP connected components. Cross-community density is an approximation.`
       };
     });
 

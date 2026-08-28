@@ -68,10 +68,18 @@ export class AuditLogger {
 
       await this.repository.save(storedRecord);
     };
+    const currentMutex = this.writeMutex;
+    let releaseMutex!: () => void;
+    this.writeMutex = new Promise((resolve) => {
+      releaseMutex = resolve;
+    });
 
-    // Serialize writes to prevent concurrent hash forks
-    this.writeMutex = this.writeMutex.then(appendTask).catch(() => appendTask());
-    await this.writeMutex;
+    try {
+      await currentMutex;
+      await appendTask();
+    } finally {
+      releaseMutex();
+    }
 
     return auditEvent;
   }
