@@ -37,11 +37,35 @@ All inter-service HTTP requests from D2 are authenticated using cryptographicall
 - `POST /analytics/bridge` — Structural bridge entity detection via betweenness centrality.
 - `POST /analytics/temporal` — Time-series communication cadence and cluster detection.
 - `POST /relationships/batch` — Bulk relationship ingestion into Neo4j (`CALLED`, `TRANSFERRED_MONEY`, `USED`, `VISITED`, `MET_AT`, `LINKED_TO`).
-- `POST /internal/entities/resolve` (`ENTITY_RESOLUTION.v1`) — Canonical entity resolution synchronization.
+- `POST /internal/entities/resolve` (`ENTITY_RESOLUTION.v1`) — Canonical entity resolution synchronization:
+  ```json
+  {
+    "candidate_id": "CAND-001",
+    "case_id": "CASE-1042",
+    "decision": "ACCEPTED",
+    "canonical_entity": {
+      "id": "ENT-001",
+      "name": "John Doe",
+      "type": "PERSON",
+      "identifiers": { "phone": "+919876543210" },
+      "properties": { "score": 0.95 },
+      "created_at": "2026-08-28T10:00:00.000Z"
+    },
+    "reviewer_id": "USR-001",
+    "decided_at": "2026-08-28T10:05:00.000Z"
+  }
+  ```
 
 ### ML Service Endpoints (`ML_SERVICE_URL`)
 - `POST /predict/entity-match` — Entity resolution match probability and explainable signal breakdown.
 - `POST /predict/anomaly` — Structural anomaly scoring and suspicious activity flagging.
+
+## Real Services vs Contract Mock Services
+
+- **Demo / Development Mode (`docker-compose.yml`)**:
+  Provides built-in contract mock HTTP services (`ml_service`, `d3_service`, `d4_service`) labeled as `CONTRACT MOCK / DEMO ONLY` to allow isolated backend contract verification and local functional testing.
+- **Production / SIH Final Integration**:
+  Replace the mock containers in `docker-compose.yml` with the real D3 (Qdrant + Ollama), D4 (Neo4j), and ML service repository containers connected to the `netra` Docker bridge network, pointing `D3_SERVICE_URL`, `D4_SERVICE_URL`, and `ML_SERVICE_URL` to their respective service names.
 
 ## Resilience & Graceful Degradation Policy
 

@@ -38,6 +38,21 @@ export const RelationshipSchema = z.object({
 
 export type RelationshipV1 = z.infer<typeof RelationshipSchema>;
 
+// Classification Clearance Scope Enum
+export const ClassificationLevels = [
+  'PUBLIC',
+  'UNCLASSIFIED',
+  'CONFIDENTIAL',
+  'CASE_RESTRICTED',
+  'RESTRICTED',
+  'SENSITIVE',
+  'SECRET',
+  'TOP_SECRET'
+] as const;
+
+export const ClassificationSchema = z.enum(ClassificationLevels);
+export type ClassificationType = z.infer<typeof ClassificationSchema>;
+
 // --- 3. EVIDENCE.v1 ---
 export const EvidenceSchema = z.object({
   id: EvidenceIdSchema,
@@ -46,7 +61,7 @@ export const EvidenceSchema = z.object({
   source_ref: z.string(),
   storage_uri: z.string(),
   sha256: z.string().length(64),
-  classification: z.string()
+  classification: ClassificationSchema
 });
 
 export type EvidenceV1 = z.infer<typeof EvidenceSchema>;
@@ -109,7 +124,7 @@ export const CaseSchema = z.object({
   title: z.string(),
   status: z.string(),
   owner_id: UserIdSchema,
-  classification: z.string()
+  classification: ClassificationSchema
 });
 export type CaseV1 = z.infer<typeof CaseSchema>;
 

@@ -171,5 +171,104 @@ describe('Security & Resilience Verification (Issues 41 - 44)', () => {
       d4FailSpy.mockRestore();
       d4SuccessSpy.mockRestore();
     });
+
+    it('Blocks unauthorized reviewer from recording decision or retrying sync for candidates in other cases (Issues 6 & 7)', async () => {
+      await db.createCandidate({
+        id: 'CAND-BETA-01',
+        case_id: 'CASE-BETA',
+        name: 'Beta Suspect',
+        score: 0.9,
+        signals: { name_similarity: 1, phonetic_similarity: 1, identifier_similarity: 1, context_similarity: 1, embedding_similarity: 1 },
+        has_conflict: false,
+        status: 'CANDIDATE',
+        candidate_data: { type: 'PERSON' },
+        created_at: new Date().toISOString()
+      });
+
+      // USR-OFFICER-A (only member of CASE-ALPHA) attempts to review candidate in CASE-BETA
+      await expect(
+        EntityReviewService.recordReviewDecision('CAND-BETA-01', 'ACCEPTED', 'USR-OFFICER-A')
+      ).rejects.toThrow();
+
+      // USR-OFFICER-A attempts to retry sync for candidate in CASE-BETA
+      await expect(
+        EntityReviewService.retrySync('CAND-BETA-01', 'USR-OFFICER-A')
+      ).rejects.toThrow();
+    });
+
+    it('Propagates dynamic reviewer role and access level downstream to D4 (Issue 5)', async () => {
+      await db.createUser({ id: 'USR-SUPERVISOR-01', display_name: 'Supervisor 1', status: 'ACTIVE', clearance_level: 3, password_hash: '' });
+      await db.assignUserRole('USR-SUPERVISOR-01', 'SUPERVISOR');
+      await db.addCaseMember('CASE-ALPHA', 'USR-SUPERVISOR-01', 'ADMIN');
+
+      await db.createCandidate({
+        id: 'CAND-ALPHA-SUP',
+        case_id: 'CASE-ALPHA',
+        name: 'Alpha Target',
+        score: 0.95,
+        signals: { name_similarity: 1, phonetic_similarity: 1, identifier_similarity: 1, context_similarity: 1, embedding_similarity: 1 },
+        has_conflict: false,
+        status: 'CANDIDATE',
+        candidate_data: { type: 'PERSON' },
+        created_at: new Date().toISOString()
+      });
+
+      const d4Spy = vi.spyOn(GraphClient, 'fetchD4').mockResolvedValueOnce({ status: 'SUCCESS' });
+
+      await EntityReviewService.recordReviewDecision('CAND-ALPHA-SUP', 'ACCEPTED', 'USR-SUPERVISOR-01');
+
+      expect(d4Spy).toHaveBeenCalledWith(
+        '/internal/entities/resolve',
+        expect.objectContaining({
+          user_id: 'USR-SUPERVISOR-01',
+          role: 'SUPERVISOR',
+          access_level: 'ADMIN'
+        }),
+        expect.anything(),
+        5000
+      );
+
+      d4Spy.mockRestore();
+    });
+  });
+
+  // Issues 8, 9 & 10: Classification Fail-Closed & Admin Clearance Enforcement
+  describe('Issues 8, 9 & 10: Classification Fail-Closed & Clearance Enforcement', () => {
+    it('Fails closed with error when an unknown or invalid classification is provided (Issues 9 & 10)', async () => {
+      const { AuthMiddleware } = await import('../src/middleware/auth.js');
+
+      await expect(
+        AuthMiddleware.authorizeCaseAccess({
+          userId: 'USR-OFFICER-A',
+          caseId: 'CASE-ALPHA',
+          classification: 'TOP_SECRET_UNKNOWN_XYZ' as any
+        })
+      ).rejects.toThrow('INVALID_CLASSIFICATION');
+    });
+
+    it('Enforces classification clearance strictly even on System Admins (Issue 8)', async () => {
+      const { AuthMiddleware } = await import('../src/middleware/auth.js');
+
+      // Create Admin with clearance level 1
+      await db.createUser({ id: 'USR-ADMIN-LOW', display_name: 'Low Clearance Admin', status: 'ACTIVE', clearance_level: 1, password_hash: '' });
+      await db.assignUserRole('USR-ADMIN-LOW', 'SYSTEM ADMIN');
+
+      // Create TOP_SECRET case (clearance level 4 required)
+      await db.createCase({
+        id: 'CASE-TOP-SECRET',
+        title: 'Operation Classified',
+        status: 'ACTIVE',
+        owner_id: 'USR-ADMIN-LOW',
+        classification: 'TOP_SECRET'
+      });
+
+      // Admin with clearance 1 should be denied access to TOP_SECRET case
+      await expect(
+        AuthMiddleware.authorizeCaseAccess({
+          userId: 'USR-ADMIN-LOW',
+          caseId: 'CASE-TOP-SECRET'
+        })
+      ).rejects.toMatchObject({ code: 'CASE_ACCESS_DENIED' });
+    });
   });
 });

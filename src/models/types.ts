@@ -83,11 +83,13 @@ export interface EntityCandidate {
   created_at: string;
 }
 
+import { ClassificationType } from '../contracts';
+
 export interface IngestRequestPayload {
   case_id: string;
   source_type: 'PDF' | 'CSV' | 'JSON' | 'Text' | string;
   source_ref: string;
   storage_uri: string;
   content: string | Buffer;
-  classification?: string;
+  classification?: ClassificationType;
 }

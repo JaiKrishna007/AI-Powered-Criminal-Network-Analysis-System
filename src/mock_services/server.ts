@@ -212,25 +212,25 @@ const d4Port = parseInt(process.env.D4_PORT || process.env.PORT || '8003', 10);
 if (serviceType === 'ml') {
   const app = createMLApp();
   app.listen(mlPort, '0.0.0.0', () => {
-    console.log(`[ML Service Mock] Listening on port ${mlPort}`);
+    console.log(`[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${mlPort}`);
   });
 } else if (serviceType === 'd3') {
   const app = createD3App();
   app.listen(d3Port, '0.0.0.0', () => {
-    console.log(`[D3 Service Mock] Listening on port ${d3Port}`);
+    console.log(`[D3 Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${d3Port}`);
   });
 } else if (serviceType === 'd4') {
   const app = createD4App();
   app.listen(d4Port, '0.0.0.0', () => {
-    console.log(`[D4 Service Mock] Listening on port ${d4Port}`);
+    console.log(`[D4 Service - CONTRACT MOCK / DEMO ONLY] Listening on port ${d4Port}`);
   });
 } else {
-  // Run all mock services simultaneously
+  // Run all mock services simultaneously for development and demo harness
   const ml = createMLApp();
   const d3 = createD3App();
   const d4 = createD4App();
 
-  ml.listen(8001, '0.0.0.0', () => console.log('[ML Service Mock] Listening on port 8001'));
-  d3.listen(8002, '0.0.0.0', () => console.log('[D3 Service Mock] Listening on port 8002'));
-  d4.listen(8003, '0.0.0.0', () => console.log('[D4 Service Mock] Listening on port 8003'));
+  ml.listen(8001, '0.0.0.0', () => console.log('[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8001'));
+  d3.listen(8002, '0.0.0.0', () => console.log('[D3 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8002'));
+  d4.listen(8003, '0.0.0.0', () => console.log('[D4 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8003'));
 }

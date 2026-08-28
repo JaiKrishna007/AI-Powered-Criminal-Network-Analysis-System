@@ -82,6 +82,12 @@ services:
     networks:
       - netra
 
+  # =========================================================================
+  # MICROSERVICE CONTRACT MOCKS (DEMO ONLY / CONTRACT VERIFICATION)
+  # Replace these containers with the real D3/D4/ML repository containers 
+  # on the 'netra' Docker network for the full end-to-end production deployment.
+  # =========================================================================
+
   ml_service:
     build: .
     command: ["npm", "run", "mock:ml"]

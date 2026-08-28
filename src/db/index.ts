@@ -260,7 +260,11 @@ export class ControlPlaneDB {
     });
   }
 
-  public async addCaseMember(member: CaseMember): Promise<CaseMember> {
+  public async addCaseMember(memberOrCaseId: CaseMember | string, userId?: string, accessLevel: string = 'MEMBER'): Promise<CaseMember> {
+    const member: CaseMember = typeof memberOrCaseId === 'string'
+      ? { case_id: memberOrCaseId, user_id: userId!, access_level: accessLevel }
+      : memberOrCaseId;
+
     if (this.isTestEnv) {
       this.testCaseMembers.push(member);
       return member;

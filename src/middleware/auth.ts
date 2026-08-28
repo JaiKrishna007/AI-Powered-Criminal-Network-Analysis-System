@@ -111,25 +111,12 @@ export class AuthMiddleware {
   /**
    * Centralized Authorization function for Case-level access.
    */
+  /**
+   * Centralized Authorization function for Case-level access.
+   * Fails closed if unknown classification is provided or user clearance is insufficient.
+   */
   public static async authorizeCaseAccess(options: AuthorizeCaseOptions): Promise<void> {
     const { userId, caseId, requiredRole, classification } = options;
-
-    const roles = await db.getUserRoles(userId);
-    if (roles.includes('SYSTEM ADMIN')) return;
-
-    if (requiredRole && !roles.includes(requiredRole)) {
-      throw ServiceErrors.CASE_ACCESS_DENIED();
-    }
-
-    const hasAccess = await db.isUserMemberOfCase(userId, caseId);
-    if (!hasAccess) {
-      throw ServiceErrors.CASE_ACCESS_DENIED();
-    }
-
-    const targetCase = await db.getCase(caseId);
-    if (!targetCase) {
-      throw new Error('CASE_NOT_FOUND');
-    }
 
     const clearanceMap: Record<string, number> = {
       'PUBLIC': 0,
@@ -142,10 +129,42 @@ export class AuthMiddleware {
       'TOP_SECRET': 4
     };
 
+    const targetCase = await db.getCase(caseId);
+    if (!targetCase) {
+      throw new Error('CASE_NOT_FOUND');
+    }
+
+    const reqClassification = classification || targetCase.classification;
+
+    // Fail closed on unknown/unsupported classifications (Issues 9 & 10)
+    if (!reqClassification || !(reqClassification in clearanceMap)) {
+      throw new Error('INVALID_CLASSIFICATION');
+    }
+
+    if (targetCase.classification && !(targetCase.classification in clearanceMap)) {
+      throw new Error('INVALID_CASE_CLASSIFICATION');
+    }
+
+    const requiredClearance = clearanceMap[reqClassification];
+
+    const roles = await db.getUserRoles(userId);
+    const isAdmin = roles.includes('SYSTEM ADMIN');
+
+    // Non-admin users must possess required role and explicit case membership
+    if (!isAdmin) {
+      if (requiredRole && !roles.includes(requiredRole)) {
+        throw ServiceErrors.CASE_ACCESS_DENIED();
+      }
+
+      const hasAccess = await db.isUserMemberOfCase(userId, caseId);
+      if (!hasAccess) {
+        throw ServiceErrors.CASE_ACCESS_DENIED();
+      }
+    }
+
+    // Clearance level check strictly applies to ALL users, including System Admins (Issue 8)
     const user = await db.getUser(userId);
     const userClearance = user?.clearance_level ?? 0;
-    const reqClassification = classification || targetCase.classification;
-    const requiredClearance = clearanceMap[reqClassification] ?? 0;
 
     if (userClearance < requiredClearance) {
       throw ServiceErrors.CASE_ACCESS_DENIED();
