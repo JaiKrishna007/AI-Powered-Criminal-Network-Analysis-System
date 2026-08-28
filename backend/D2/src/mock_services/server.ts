@@ -249,7 +249,7 @@ if (require.main === module) {
     const d3 = createD3App();
     const d4 = createD4App();
 
-    ml.listen(8001, '0.0.0.0', () => console.log('[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8001'));
+    ml.listen(8000, '0.0.0.0', () => console.log('[ML Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8000'));
     d3.listen(8002, '0.0.0.0', () => console.log('[D3 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8002'));
     d4.listen(8003, '0.0.0.0', () => console.log('[D4 Service - CONTRACT MOCK / DEMO ONLY] Listening on port 8003'));
   }
