@@ -1,21 +1,41 @@
+export interface SourceSpan {
+  page?: number;
+  start?: number;
+  end?: number;
+  row?: number;
+  column?: string | number;
+  text?: string;
+  json_path?: string;
+}
+
 export interface ExtractedCandidateRecord {
   name: string;
   type: string; // PERSON, PHONE, IMEI, ACCOUNT, VEHICLE, LOCATION, ORGANIZATION, CASE, EVENT
   phone?: string;
   identifiers?: Record<string, string>;
   context?: Record<string, any>;
+  page?: number;
+  source_span?: SourceSpan;
 }
 
 export interface ExtractedRelationshipRecord {
+  id?: string;
   source_name: string;
   target_name: string;
+  source_id?: string;
+  target_id?: string;
   type: string; // CALLED, TRANSFERRED_MONEY, USED, VISITED, MET_AT, LINKED_TO
+  evidence_ids?: string[];
+  page?: number;
+  source_span?: SourceSpan;
   properties?: Record<string, any>;
 }
 
 export interface ExtractedEventRecord {
   name: string;
   event_time?: string;
+  page?: number;
+  source_span?: SourceSpan;
   properties?: Record<string, any>;
 }
 
@@ -24,7 +44,7 @@ export interface ExtractedMetadata {
   records: ExtractedCandidateRecord[]; // entities
   relationships?: ExtractedRelationshipRecord[];
   events?: ExtractedEventRecord[];
-  source_spans?: Array<{ type: string; value: string; index: number; length: number }>;
+  source_spans?: Array<{ type: string; value: string; page?: number; start?: number; end?: number; row?: number; column?: string | number; text?: string }>;
 }
 
 export interface IExtractionWorker {

@@ -463,17 +463,27 @@ export class ControlPlaneDB {
     return job;
   }
 
-  public async updateIngestionJobState(id: string, state: IngestionJob['state'], error?: string | null): Promise<IngestionJob | null> {
+  public async updateIngestionJobState(
+    id: string,
+    state: IngestionJob['state'],
+    error?: string | null,
+    warnings?: string[],
+    graph_sync?: IngestionJob['graph_sync']
+  ): Promise<IngestionJob | null> {
     if (this.isTestEnv) {
       const job = this.testIngestionJobs.get(id);
       if (!job) return null;
       job.state = state;
       if (error !== undefined) job.error = error;
+      if (warnings !== undefined) job.warnings = warnings;
+      if (graph_sync !== undefined) job.graph_sync = graph_sync;
       return job;
     }
     
     const updateDoc: any = { $set: { state } };
     if (error !== undefined) updateDoc.$set.error = error !== null ? error : null;
+    if (warnings !== undefined) updateDoc.$set.warnings = warnings;
+    if (graph_sync !== undefined) updateDoc.$set.graph_sync = graph_sync;
     
     const res = await this.getCollection('ingestion_jobs').findOneAndUpdate(
       { id },

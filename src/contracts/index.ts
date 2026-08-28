@@ -33,6 +33,7 @@ export const RelationshipSchema = z.object({
   target_id: z.string(),
   type: z.string(),
   weight: z.number().min(0).max(1).optional(),
+  evidence_ids: z.array(z.string()).optional(),
   properties: z.record(z.string(), z.any()).optional(),
   created_at: TimestampSchema
 });
@@ -89,6 +90,8 @@ export const IngestJobSchema = z.object({
   case_id: CaseIdSchema,
   source_ref: z.string(),
   state: z.enum(['QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED']),
+  warnings: z.array(z.string()).optional(),
+  graph_sync: z.enum(['SYNCED', 'FAILED', 'PENDING', 'SKIPPED']).optional(),
   error: z.string().nullable().optional()
 });
 

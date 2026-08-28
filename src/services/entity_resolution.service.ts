@@ -42,8 +42,36 @@ export class EntityResolutionService {
   public static readonly WEIGHT_EMBEDDING = 0.20;
 
   /**
+   * Cheap deterministic blocking filter (Issue 21).
+   * Checks phone, identifiers, phonetics, or name similarity before invoking expensive downstream ML calls.
+   */
+  public static passesCandidateBlocking(
+    rec1: { name: string; phone?: string | null; identifiers?: Record<string, string> },
+    rec2: { name: string; phone?: string | null; identifiers?: Record<string, string> }
+  ): boolean {
+    const p1 = (rec1 as any).phone || (rec1 as any).original_phone || (rec1 as any).normalized_phone;
+    const p2 = (rec2 as any).phone || (rec2 as any).original_phone || (rec2 as any).normalized_phone;
+    if (p1 && p2 && p1 === p2) return true;
+
+    const id1 = rec1.identifiers || {};
+    const id2 = rec2.identifiers || {};
+    for (const k of Object.keys(id1)) {
+      if (id2[k] && id1[k] === id2[k]) return true;
+    }
+
+    if (this.soundex(rec1.name) === this.soundex(rec2.name)) return true;
+
+    const n1 = rec1.name.toLowerCase().trim();
+    const n2 = rec2.name.toLowerCase().trim();
+    if (n1 === n2 || n1.includes(n2) || n2.includes(n1)) return true;
+
+    const lev = this.levenshteinSimilarity(n1, n2);
+    return lev >= 0.40;
+  }
+
+  /**
    * Computes candidate score and signal breakdown for a pair of records.
-   * Dispatches to injected ML client without hardcoded test hacks or fabricated fallback scores.
+   * Employs cheap deterministic blocking to skip ML calls for completely non-matching records (Issue 21).
    */
   public static async evaluateCandidate(
     caseId: string,
@@ -69,23 +97,18 @@ export class EntityResolutionService {
     review_recommendation?: string;
     ml_status: 'AVAILABLE' | 'UNAVAILABLE';
   }> {
-    
-    // Call injected ML client to get probability and signals
-    let mlResponse: { probability: number; signals?: Record<string, number> } | null = null;
-    let mlStatus: 'AVAILABLE' | 'UNAVAILABLE' = 'AVAILABLE';
-    
-    try {
-      mlResponse = await this.mlClient.predictEntityMatch({ existingRecord, newRecord });
-    } catch (e) {
-      console.warn('ML Service unavailable during candidate evaluation:', e);
-      mlStatus = 'UNAVAILABLE';
-      mlResponse = null;
-    }
+    const isCandidateBlocked = this.passesCandidateBlocking(existingRecord, newRecord);
 
     const normPhone1 = (existingRecord as any).phone || (existingRecord as any).original_phone || (existingRecord as any).normalized_phone || '';
     const normPhone2 = (newRecord as any).phone || (newRecord as any).original_phone || (newRecord as any).normalized_phone || '';
 
-    // Check conflict (BE-T05: High name similarity + conflicting phone/identifier)
+    // Calculate deterministic signals for verification/fallback
+    const nameSim = this.computeNameSimilarity(existingRecord.name, newRecord.name);
+    const phoneSim = this.computePhoneticSimilarity(existingRecord.name, newRecord.name);
+    const contextSim = this.computeContextSimilarity(caseId, existingRecord.context || {}, newRecord.context || {});
+    const embSim = this.computeEmbeddingSimilarity(existingRecord.name, newRecord.name);
+
+    // Check conflict (BE-T05: High name/phonetic similarity + conflicting phone/identifier)
     const { isConflictingPhone, isConflictingIdentifier, identifierSim } = this.computeIdentifierSimilarity(
       normPhone1,
       normPhone2,
@@ -93,13 +116,7 @@ export class EntityResolutionService {
       newRecord.identifiers || {}
     );
 
-    const hasConflict = isConflictingPhone || isConflictingIdentifier;
-
-    // Calculate deterministic signals for verification/fallback
-    const nameSim = this.computeNameSimilarity(existingRecord.name, newRecord.name);
-    const phoneSim = this.computePhoneticSimilarity(existingRecord.name, newRecord.name);
-    const contextSim = this.computeContextSimilarity(caseId, existingRecord.context || {}, newRecord.context || {});
-    const embSim = this.computeEmbeddingSimilarity(existingRecord.name, newRecord.name);
+    const hasConflict = (nameSim >= 0.70 || phoneSim === 1.0) && (isConflictingPhone || isConflictingIdentifier);
 
     let deterministicScore = 
       0.30 * nameSim +
@@ -110,6 +127,38 @@ export class EntityResolutionService {
 
     if (hasConflict) {
       deterministicScore *= 0.5;
+    }
+
+    // If pair did not pass candidate blocking filter, avoid invoking ML and return non-match
+    if (!isCandidateBlocked) {
+      return {
+        score: Number(deterministicScore.toFixed(4)),
+        deterministic_score: Number(deterministicScore.toFixed(4)),
+        ml_probability: null,
+        signals: {
+          name_similarity: nameSim,
+          phonetic_similarity: phoneSim,
+          identifier_similarity: identifierSim,
+          context_similarity: contextSim,
+          embedding_similarity: embSim
+        },
+        has_conflict: hasConflict,
+        auto_merge_allowed: false,
+        review_recommendation: hasConflict ? 'CONFLICT_WARNING' : 'NO_MATCH',
+        ml_status: 'AVAILABLE'
+      };
+    }
+
+    // Call injected ML client to get probability and signals only for candidate pairs passing blocking
+    let mlResponse: { probability: number; signals?: Record<string, number> } | null = null;
+    let mlStatus: 'AVAILABLE' | 'UNAVAILABLE' = 'AVAILABLE';
+    
+    try {
+      mlResponse = await this.mlClient.predictEntityMatch({ existingRecord, newRecord });
+    } catch (e) {
+      console.warn('ML Service unavailable during candidate evaluation:', e);
+      mlStatus = 'UNAVAILABLE';
+      mlResponse = null;
     }
 
     if (mlStatus === 'UNAVAILABLE' || !mlResponse) {

@@ -126,6 +126,8 @@ export class IngestionService {
       const extractionResult = await ExtractionService.processExtractionWorker(normalizedType, contentBuffer);
       const existingCandidates = await db.getCandidatesByCase(payload.case_id);
 
+      const nameToCandidateId = new Map<string, string>();
+
       for (const rec of extractionResult.records) {
         const normDate = rec.context?.date ? NormalizationService.normalizeDate(rec.context.date) : undefined;
         const normPhone = rec.phone ? NormalizationService.normalizePhone(rec.phone) : undefined;
@@ -172,6 +174,9 @@ export class IngestionService {
         }
 
         const candId = `CAND-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        nameToCandidateId.set(rec.name.toLowerCase().trim(), candId);
+        if (rec.phone) nameToCandidateId.set(rec.phone.trim(), candId);
+
         const candidate: EntityCandidate = {
           id: candId,
           case_id: payload.case_id,
@@ -180,7 +185,11 @@ export class IngestionService {
           original_phone: normPhone?.original || null,
           normalized_phone: normPhone?.normalized || null,
           identifiers: rec.identifiers || {},
-          context: rec.context || {},
+          context: {
+            ...rec.context,
+            page: rec.page || 1,
+            source_span: rec.source_span
+          },
           score: bestScore,
           deterministic_score: candidateDeterministicScore || bestScore,
           ml_probability: candidateMLProbability,
@@ -197,27 +206,70 @@ export class IngestionService {
         candidatesExtracted.push(candidate);
       }
 
-      // Publish extracted relationships to D4 (Graph Service / Neo4j)
+      // Publish extracted relationships to D4 (Graph Service / Neo4j) with strict schema validation
+      let graphSyncStatus: 'SYNCED' | 'FAILED' | 'SKIPPED' = 'SKIPPED';
+      let jobWarnings: string[] | undefined = undefined;
+
       if (extractionResult.relationships && extractionResult.relationships.length > 0) {
-        try {
-          const authCtx = {
-            user_id: 'SYSTEM',
-            role: 'SYSTEM',
-            case_id: payload.case_id,
-            access_level: 'ADMIN'
+        const { RelationshipSchema } = await import('../contracts/index.js');
+        const validatedRelationships: any[] = [];
+
+        for (const rel of extractionResult.relationships) {
+          const sourceId = nameToCandidateId.get(rel.source_name.toLowerCase().trim()) || `CAND-${Date.now()}-SRC`;
+          const targetId = nameToCandidateId.get(rel.target_name.toLowerCase().trim()) || `CAND-${Date.now()}-TGT`;
+          const relId = rel.id || `REL-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+          const structuredRel = {
+            id: relId,
+            source_id: sourceId,
+            target_id: targetId,
+            type: rel.type,
+            evidence_ids: [evidenceId],
+            properties: {
+              ...rel.properties,
+              source_name: rel.source_name,
+              target_name: rel.target_name,
+              provenance: {
+                evidence_id: evidenceId,
+                page: rel.page || 1,
+                source_span: rel.source_span
+              }
+            },
+            created_at: new Date().toISOString()
           };
-          const { GraphClient } = await import('./graph_client.js');
-          await GraphClient.fetchD4('/relationships/batch', authCtx, {
-            case_id: payload.case_id,
-            evidence_id: evidenceId,
-            relationships: extractionResult.relationships
-          }, 5000);
-        } catch (err: any) {
-          console.warn(`Failed to publish extracted relationships to D4: ${err.message}`);
+
+          const parseRes = RelationshipSchema.safeParse(structuredRel);
+          if (parseRes.success) {
+            validatedRelationships.push(parseRes.data);
+          } else {
+            console.warn('Rejected invalid relationship contract item:', parseRes.error);
+          }
+        }
+
+        if (validatedRelationships.length > 0) {
+          try {
+            const authCtx = {
+              user_id: 'SYSTEM',
+              role: 'SYSTEM',
+              case_id: payload.case_id,
+              access_level: 'ADMIN'
+            };
+            const { GraphClient } = await import('./graph_client.js');
+            await GraphClient.fetchD4('/relationships/batch', authCtx, {
+              case_id: payload.case_id,
+              evidence_id: evidenceId,
+              relationships: validatedRelationships
+            }, 5000);
+            graphSyncStatus = 'SYNCED';
+          } catch (err: any) {
+            console.warn(`Failed to publish extracted relationships to D4: ${err.message}`);
+            graphSyncStatus = 'FAILED';
+            jobWarnings = ['GRAPH_SYNC_FAILED'];
+          }
         }
       }
 
-      await db.updateIngestionJobState(jobId, 'COMPLETED');
+      await db.updateIngestionJobState(jobId, 'COMPLETED', null, jobWarnings, graphSyncStatus);
     }
 
     job = (await db.getIngestionJob(jobId))!;
