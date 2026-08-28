@@ -1,8 +1,6 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import bcrypt from 'bcryptjs';
-import connectToDatabase from '@/lib/db/mongodb';
-import { User, Role } from '@/lib/db/models/User';
+const getD2Url = () => process.env.D2_SERVICE_URL || 'http://localhost:8001';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -17,26 +15,32 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid credentials');
         }
 
-        await connectToDatabase();
+        try {
+          const response = await fetch(`${getD2Url()}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: credentials.email,
+              password: credentials.password
+            })
+          });
 
-        const user = await User.findOne({ email: credentials.email }).lean();
+          if (!response.ok) {
+            throw new Error('Invalid credentials or user disabled');
+          }
 
-        if (!user || user.status === 'DISABLED') {
-          throw new Error('User not found or disabled');
+          const data = await response.json();
+          // Assume D2 returns { token, user: { id, email, name, role } }
+          return {
+            id: data.user?.id || 'unknown',
+            email: data.user?.email || credentials.email,
+            name: data.user?.name || 'User',
+            role: data.user?.role || 'INVESTIGATOR',
+            accessToken: data.token
+          };
+        } catch (error) {
+           throw new Error('Login failed');
         }
-
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
-
-        if (!isPasswordValid) {
-          throw new Error('Invalid credentials');
-        }
-
-        return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
       },
     }),
   ],
@@ -54,7 +58,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).id = token.id as string;
-        (session.user as any).role = token.role as Role;
+        (session.user as any).role = token.role as string;
       }
       return session;
     },

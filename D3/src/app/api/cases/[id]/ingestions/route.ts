@@ -4,15 +4,17 @@ import { authOptions } from '@/lib/auth/authOptions';
 
 const getD2Url = () => process.env.D2_SERVICE_URL || 'http://localhost:8001';
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  let caseId = 'unknown';
   try {
+    const { id } = await params;
+    caseId = id;
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const caseId = params.id;
-    if (!caseId) {
+    if (!caseId || caseId === 'unknown') {
       return NextResponse.json({ error: 'Invalid Case ID' }, { status: 400 });
     }
 
@@ -41,7 +43,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json(data, { status: 201 });
 
   } catch (error: any) {
-    console.error(`Error uploading to case ${params.id} via D2:`, error);
+    console.error(`Error uploading to case ${caseId} via D2:`, error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

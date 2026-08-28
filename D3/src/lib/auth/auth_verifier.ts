@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { AuthContext } from '../../../../../shared-contracts';
+import { AuthContext } from '../../../../shared-contracts';
 
 function getInternalSecret(): string {
   if (process.env.NODE_ENV === 'production') {
@@ -23,13 +23,13 @@ export function verifyAuthContext(contextStr: string, signatureStr: string): boo
 
     if (signatureStr.length !== expected.length) return false;
     const isValid = crypto.timingSafeEqual(Buffer.from(signatureStr), Buffer.from(expected));
-    
+
     if (!isValid) return false;
-    
+
     const parsed = JSON.parse(contextJson);
     if (!parsed.expires_at) return false;
     if (Date.now() > parsed.expires_at) return false;
-    
+
     return true;
   } catch (err) {
     return false;
@@ -70,8 +70,8 @@ export function extractAndVerifyAuthContext(headers: Record<string, string | str
     actor_id: parsed.actor_id || parsed.user_id,
     role: parsed.role,
     case_id: parsed.case_id,
-    allowed_case_ids: Array.isArray(parsed.allowed_case_ids) 
-      ? parsed.allowed_case_ids 
+    allowed_case_ids: Array.isArray(parsed.allowed_case_ids)
+      ? parsed.allowed_case_ids
       : [parsed.case_id],
     access_level: parsed.access_level || 'READ',
     correlation_id: parsed.correlation_id || ''

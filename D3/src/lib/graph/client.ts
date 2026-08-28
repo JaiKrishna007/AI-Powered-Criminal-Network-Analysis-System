@@ -1,11 +1,11 @@
-import { GRAPH_v1 } from '../../../../../shared-contracts';
+import { GRAPH_v1 } from '../../../../shared-contracts';
 
 const getD4Url = () => process.env.D4_SERVICE_URL || 'http://localhost:8003';
 
 export class GraphContextClient {
   static async fetchD4(endpoint: string, rawContext: string, payload: any, authSignature: string, correlationId?: string) {
     const url = `${getD4Url()}${endpoint}`;
-    
+
     // Forward the original EXACT raw headers to preserve HMAC validation in D4
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

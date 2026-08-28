@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
       path: request.nextUrl.pathname,
       user_id: token?.id || 'anonymous',
       user_role: token?.role || 'none',
-      ip: request.headers.get('x-forwarded-for') || request.ip || 'unknown'
+      ip: request.headers.get('x-forwarded-for') || 'unknown'
     }));
   }
 
