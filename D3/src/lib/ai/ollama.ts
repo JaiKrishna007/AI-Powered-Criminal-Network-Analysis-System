@@ -1,7 +1,7 @@
 // Ollama Integration for D3 Agent Copilot
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:4b';
+const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen3:4b';
 
 interface OllamaMessage {
   role: 'system' | 'user' | 'assistant';
@@ -33,9 +33,11 @@ export async function generateCopilotResponse(messages: OllamaMessage[], options
     const data = await response.json();
     return data.message.content;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error communicating with Ollama:", error);
-    throw new Error("AI Copilot is currently unavailable. Please ensure Ollama is running.");
+    const err = new Error(error.message || "MODEL_UNAVAILABLE");
+    err.name = "MODEL_UNAVAILABLE";
+    throw err;
   }
 }
 

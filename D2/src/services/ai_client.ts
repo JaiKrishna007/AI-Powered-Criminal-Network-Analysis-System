@@ -3,7 +3,7 @@ import { ServiceErrors, handleServiceError } from '../errors/service_errors';
 
 const getD3Url = () => process.env.D3_SERVICE_URL || 'http://localhost:8002';
 
-import { AuthContext, AISearchResponseSchema, AICopilotResponseSchema } from '../contracts';
+import { AuthContext, AISearchResponseSchema, AIResponseV1Schema } from '../contracts';
 export { AuthContext };
 
 const LeadResponseSchema = z.object({
@@ -83,7 +83,7 @@ export class AIClient {
   }
 
   static async copilot(context: AuthContext, query: string) {
-    return await this.fetchD3('/api/m2m/copilot', context, { query }, 30000, AICopilotResponseSchema);
+    return await this.fetchD3('/api/m2m/copilot', context, { query }, 30000, AIResponseV1Schema);
   }
 
   static async generateLeads(context: AuthContext, request: any) {

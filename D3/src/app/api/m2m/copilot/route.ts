@@ -116,6 +116,9 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error(`M2M Copilot Error:`, error);
+    if (error.name === 'MODEL_UNAVAILABLE' || error.message?.includes('MODEL_UNAVAILABLE')) {
+      return NextResponse.json({ error: 'MODEL_UNAVAILABLE', details: error.message }, { status: 503 });
+    }
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

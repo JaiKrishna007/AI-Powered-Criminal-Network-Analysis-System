@@ -41,21 +41,25 @@ async function checkQdrantCollection(collectionName: string) {
 async function main() {
   console.log("--- D3 RAG DIAGNOSTIC CHECK ---");
   
-  // 1. Check Qwen (Generation Model) embedding dimension
-  console.log("\nChecking 'qwen2.5:4b' model...");
-  const mistralDim = await getEmbeddingDimension('qwen2.5:4b');
-  console.log(`Qwen Embedding Dimension: ${mistralDim || 'Failed (Not pulled yet?)'}`);
-
-  // 2. Check Nomic-Embed-Text (Dedicated Embedding Model) dimension
-  console.log("\nChecking 'multilingual-e5-small' model...");
-  const nomicDim = await getEmbeddingDimension('multilingual-e5-small');
-  console.log(`Nomic-Embed-Text Embedding Dimension: ${nomicDim || 'Failed (Not pulled yet?)'}`);
+  const MODEL_NAME = 'multilingual-e5-small';
+  console.log(`\nChecking '${MODEL_NAME}' model...`);
+  const actualDim = await getEmbeddingDimension(MODEL_NAME);
+  console.log(`Actual Embedding Dimension: ${actualDim || 'Failed (Not pulled yet?)'}`);
   
-  // 3. Check Qdrant Config
-  const COLLECTION_NAME = "evidence"; // Assume standard name if not passed
+  const COLLECTION_NAME = "evidence";
   console.log(`\nChecking Qdrant Collection '${COLLECTION_NAME}'...`);
   const qdrantDim = await checkQdrantCollection(COLLECTION_NAME);
   console.log(`Qdrant Collection Dimension: ${qdrantDim || 'Not found/Error'}`);
+  
+  if (actualDim && qdrantDim) {
+    if (actualDim === qdrantDim) {
+      console.log("\nStatus: MATCH");
+    } else {
+      console.log("\nStatus: MISMATCH");
+    }
+  } else {
+    console.log("\nStatus: MISMATCH (Incomplete Data)");
+  }
 }
 
 main();
