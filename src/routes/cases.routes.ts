@@ -112,7 +112,15 @@ router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req
   try {
     const case_id = req.params.case_id;
     const { source_type, source_ref, storage_uri, content, classification } = req.body;
-    
+
+    if (classification) {
+      await AuthMiddleware.authorizeCaseAccess({
+        userId: req.user!.id,
+        caseId: case_id,
+        classification
+      });
+    }
+
     await AuditMiddleware.logAction(req.user!.id, 'INGEST_EVIDENCE', case_id);
 
     if (!source_type || !content) {
@@ -136,6 +144,9 @@ router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req
       is_duplicate: result.isDuplicate || false
     });
   } catch (err: any) {
+    if (err.code === 'CASE_ACCESS_DENIED' || err.message?.includes('Clearance') || err.message?.includes('Access denied')) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: err.message });
+    }
     if (err.code) {
       return res.status(400).json({ error: err.code, message: err.message });
     }

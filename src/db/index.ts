@@ -96,6 +96,9 @@ export class ControlPlaneDB {
     await this.db.collection('ingestion_jobs').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('entity_review').createIndex({ candidate_id: 1 }, { unique: true });
     await this.db.collection('audit_event_ref').createIndex({ event_id: 1 }, { unique: true });
+    await this.db.collection('audit_event_ref').createIndex({ actor_id: 1, timestamp: -1 });
+    await this.db.collection('audit_event_ref').createIndex({ case_id: 1, timestamp: -1 });
+    await this.db.collection('audit_event_ref').createIndex({ action: 1, timestamp: -1 });
     await this.db.collection('reports').createIndex({ id: 1 }, { unique: true });
     await this.db.collection('reports').createIndex({ case_id: 1, version: 1 }, { unique: true });
   }

@@ -21,7 +21,8 @@ router.get('/:id/integrity', async (req: AuthenticatedRequest, res: Response) =>
   try {
     await AuthMiddleware.authorizeCaseAccess({
       userId: req.user!.id,
-      caseId: evidence.case_id
+      caseId: evidence.case_id,
+      classification: evidence.classification
     });
   } catch (err: any) {
     return res.status(403).json({ error: 'FORBIDDEN', message: err.message || 'Access denied' });
@@ -43,7 +44,8 @@ router.get('/:id', AuditMiddleware.auditEvent('EVIDENCE_VIEW'), async (req: Auth
   try {
     await AuthMiddleware.authorizeCaseAccess({
       userId: req.user!.id,
-      caseId: evidence.case_id
+      caseId: evidence.case_id,
+      classification: evidence.classification
     });
   } catch (err: any) {
     return res.status(403).json({ error: 'FORBIDDEN', message: err.message || 'Access denied' });
@@ -64,7 +66,8 @@ router.get('/:id/download', AuditMiddleware.auditEvent('EVIDENCE_EXPORT'), async
   try {
     await AuthMiddleware.authorizeCaseAccess({
       userId: req.user!.id,
-      caseId: evidence.case_id
+      caseId: evidence.case_id,
+      classification: evidence.classification
     });
   } catch (err: any) {
     return res.status(403).json({ error: 'FORBIDDEN', message: err.message || 'Access denied' });

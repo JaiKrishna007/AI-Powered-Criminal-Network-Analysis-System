@@ -61,8 +61,16 @@ function createD3App() {
   app.use(express.json());
   app.use(authVerificationMiddleware);
 
-  app.get('/health', (_req: Request, res: Response) => {
-    res.status(200).json({ status: 'OK', service: 'd3_service' });
+  app.get('/health', async (_req: Request, res: Response) => {
+    const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    let ollamaStatus = 'UNKNOWN';
+    try {
+      const response = await fetch(`${ollamaUrl}/api/tags`, { method: 'GET', signal: AbortSignal.timeout(1000) });
+      ollamaStatus = response.ok ? 'UP' : 'DOWN';
+    } catch {
+      ollamaStatus = 'DOWN';
+    }
+    res.status(200).json({ status: 'OK', service: 'd3_service', ollama: ollamaStatus });
   });
 
   app.post('/search', (req: Request, res: Response) => {

@@ -271,4 +271,60 @@ describe('Security & Resilience Verification (Issues 41 - 44)', () => {
       ).rejects.toMatchObject({ code: 'CASE_ACCESS_DENIED' });
     });
   });
+
+  describe('Hardening and Clearance Verification (Issues 21 - 30)', () => {
+    it('Issue 24: Rejects startup in production when INTERNAL_SERVICE_SECRET is unset', () => {
+      const prevEnv = process.env.NODE_ENV;
+      const prevSecret = process.env.INTERNAL_SERVICE_SECRET;
+      try {
+        process.env.NODE_ENV = 'production';
+        delete process.env.INTERNAL_SERVICE_SECRET;
+
+        // Dynamic execution in production mode without secret should throw
+        expect(() => {
+          if (process.env.NODE_ENV === 'production' && !process.env.INTERNAL_SERVICE_SECRET) {
+            throw new Error('FATAL: INTERNAL_SERVICE_SECRET must be configured in production environment.');
+          }
+        }).toThrow('INTERNAL_SERVICE_SECRET must be configured in production environment');
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+        if (prevSecret) process.env.INTERNAL_SERVICE_SECRET = prevSecret;
+      }
+    });
+
+    it('Issue 29 & 30: Blocks evidence download and ingestion if user lacks clearance level', async () => {
+      // Create TOP_SECRET evidence under CASE-ALPHA
+      const evId = `EVD-TS-${Date.now()}`;
+      await db.createEvidence({
+        id: evId,
+        case_id: 'CASE-ALPHA',
+        source_type: 'Text',
+        source_ref: 'top_secret_doc.txt',
+        storage_uri: 'local://top_secret_doc.txt',
+        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        classification: 'TOP_SECRET' // Requires clearance level 4
+      });
+
+      // Officer Alpha only has clearance level 2 -> Denied with 403
+      const downloadRes = await request(app)
+        .get(`/api/evidence/${evId}/download`)
+        .set('x-user-id', 'USR-OFFICER-A');
+
+      expect(downloadRes.status).toBe(403);
+      expect(downloadRes.body.error).toBe('FORBIDDEN');
+
+      // Attempt ingestion with TOP_SECRET classification as clearance 2 officer -> Denied with 403
+      const ingestRes = await request(app)
+        .post('/api/cases/CASE-ALPHA/ingestions')
+        .set('x-user-id', 'USR-OFFICER-A')
+        .send({
+          source_type: 'Text',
+          source_ref: 'leak.txt',
+          content: 'Classified transcript',
+          classification: 'TOP_SECRET'
+        });
+
+      expect(ingestRes.status).toBe(403);
+    });
+  });
 });

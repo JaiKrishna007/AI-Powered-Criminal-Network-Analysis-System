@@ -1,6 +1,16 @@
 import crypto from 'crypto';
 
-const INTERNAL_SECRET = process.env.INTERNAL_SERVICE_SECRET || process.env.SESSION_SECRET || 'netra-internal-secret';
+function getInternalSecret(): string {
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.INTERNAL_SERVICE_SECRET) {
+      throw new Error('FATAL: INTERNAL_SERVICE_SECRET must be configured in production environment.');
+    }
+    return process.env.INTERNAL_SERVICE_SECRET;
+  }
+  return process.env.INTERNAL_SERVICE_SECRET || 'demo-internal-service-hmac-secret';
+}
+
+const INTERNAL_SECRET = getInternalSecret();
 
 /**
  * Computes an HMAC-SHA256 signature for internal microservice authorization contexts.

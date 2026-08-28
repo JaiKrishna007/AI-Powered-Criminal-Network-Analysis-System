@@ -26,9 +26,21 @@ if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
 }
 const sessionSecret = process.env.SESSION_SECRET || 'demo-session-secret-prototype-key';
 
-// Redis session store with MemoryStore fallback for test environments (Issue 35)
+// Redis session store with MemoryStore fallback for test/dev environments (Issue 23 & 35)
 let sessionStore;
-if (process.env.NODE_ENV !== 'test' && process.env.REDIS_URL) {
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.REDIS_URL) {
+    throw new Error('FATAL: REDIS_URL must be configured in production environment for distributed session storage.');
+  }
+  try {
+    const { RedisStore } = require('connect-redis');
+    const Redis = require('ioredis');
+    const redisClient = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 3 });
+    sessionStore = new RedisStore({ client: redisClient, prefix: 'sess:' });
+  } catch (err: any) {
+    throw new Error(`FATAL: Failed to initialize Redis session store in production: ${err.message}`);
+  }
+} else if (process.env.NODE_ENV !== 'test' && process.env.REDIS_URL) {
   try {
     const { RedisStore } = require('connect-redis');
     const Redis = require('ioredis');
