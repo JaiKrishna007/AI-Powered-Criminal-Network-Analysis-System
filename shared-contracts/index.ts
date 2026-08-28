@@ -189,13 +189,13 @@ export const AISearchResultSchema = z.object({
   source: z.string().optional()
 });
 
-export const AIResponseSchema = z.object({
+export const AISearchResponseSchema = z.object({
   status: z.string().optional(),
   results: z.array(AISearchResultSchema),
   insights: z.array(z.string()).optional()
 });
 
-export const AIResponseV1Schema = z.object({
+export const AICopilotResponseSchema = z.object({
   status: z.string(),
   response: z.string(),
   grounding: z.array(z.string()).optional()
@@ -331,7 +331,7 @@ export interface INSIGHT_v1 {
   insights?: string[];
 }
 
-export interface AI_RESPONSE_v1 {
+export interface AI_COPILOT_RESPONSE_v1 {
   status: string;
   response: string;
   grounding?: string[];
