@@ -6,11 +6,25 @@ export interface IEmbeddingService {
   computeSimilarity(text1: string, text2: string): number | Promise<number>;
 }
 
+export interface IMLClient {
+  predictEntityMatch(candidatePair: any): Promise<{ probability: number; signals?: Record<string, number> }>;
+  predictAnomaly?(activitySeries: any): Promise<any>;
+}
+
 export class EntityResolutionService {
   private static embeddingService: IEmbeddingService | null = null;
+  private static mlClient: IMLClient = MLClient;
 
   public static setEmbeddingService(service: IEmbeddingService | null): void {
     this.embeddingService = service;
+  }
+
+  public static setMLClient(client: IMLClient): void {
+    this.mlClient = client;
+  }
+
+  public static resetMLClient(): void {
+    this.mlClient = MLClient;
   }
 
   /**
@@ -29,6 +43,7 @@ export class EntityResolutionService {
 
   /**
    * Computes candidate score and signal breakdown for a pair of records.
+   * Dispatches to injected ML client without hardcoded test hacks or fabricated fallback scores.
    */
   public static async evaluateCandidate(
     caseId: string,
@@ -49,28 +64,26 @@ export class EntityResolutionService {
     signals: EntitySignals;
     has_conflict: boolean;
     auto_merge_allowed: boolean;
+    ml_status: 'AVAILABLE' | 'UNAVAILABLE';
   }> {
     
-    // Call ML service to get probability and signals (Task 36)
-    let mlResponse: { probability: number; signals?: Record<string, number> } = { probability: 0 };
+    // Call injected ML client to get probability and signals
+    let mlResponse: { probability: number; signals?: Record<string, number> } | null = null;
+    let mlStatus: 'AVAILABLE' | 'UNAVAILABLE' = 'AVAILABLE';
     
-    if (process.env.NODE_ENV === 'test') {
-      mlResponse.probability = 0.95; // Mock high score for testing
-    } else {
-      try {
-        mlResponse = await MLClient.predictEntityMatch({ existingRecord, newRecord });
-      } catch (e) {
-        console.warn('ML Service failed, using fallback score', e);
-        mlResponse.probability = 0.5;
-      }
+    try {
+      mlResponse = await this.mlClient.predictEntityMatch({ existingRecord, newRecord });
+    } catch (e) {
+      console.warn('ML Service unavailable during candidate evaluation:', e);
+      mlStatus = 'UNAVAILABLE';
+      mlResponse = null;
     }
 
     const normPhone1 = (existingRecord as any).phone || (existingRecord as any).original_phone || (existingRecord as any).normalized_phone || '';
     const normPhone2 = (newRecord as any).phone || (newRecord as any).original_phone || (newRecord as any).normalized_phone || '';
 
     // Check conflict (BE-T05: High name similarity + conflicting phone/identifier)
-    // We can still do deterministic conflict check here
-    const { isConflictingPhone, isConflictingIdentifier } = this.computeIdentifierSimilarity(
+    const { isConflictingPhone, isConflictingIdentifier, identifierSim } = this.computeIdentifierSimilarity(
       normPhone1,
       normPhone2,
       existingRecord.identifiers || {},
@@ -78,6 +91,30 @@ export class EntityResolutionService {
     );
 
     const hasConflict = isConflictingPhone || isConflictingIdentifier;
+
+    // Calculate deterministic signals for verification/fallback
+    const nameSim = this.computeNameSimilarity(existingRecord.name, newRecord.name);
+    const phoneSim = this.computePhoneticSimilarity(existingRecord.name, newRecord.name);
+    const contextSim = this.computeContextSimilarity(caseId, existingRecord.context || {}, newRecord.context || {});
+    const embSim = this.computeEmbeddingSimilarity(existingRecord.name, newRecord.name);
+
+    if (mlStatus === 'UNAVAILABLE' || !mlResponse) {
+      // Contract: Never fabricate probability = 0.5.
+      // Retain unresolved state (score 0), compute deterministic signals, and require human review.
+      return {
+        score: 0.0,
+        signals: {
+          name_similarity: nameSim,
+          phonetic_similarity: phoneSim,
+          identifier_similarity: identifierSim,
+          context_similarity: contextSim,
+          embedding_similarity: embSim
+        },
+        has_conflict: hasConflict,
+        auto_merge_allowed: false,
+        ml_status: 'UNAVAILABLE'
+      };
+    }
 
     let totalScore = mlResponse.probability;
 
@@ -92,14 +129,15 @@ export class EntityResolutionService {
     return {
       score: Number(totalScore.toFixed(4)),
       signals: {
-        name_similarity: mlResponse.signals?.name_similarity || 0,
-        phonetic_similarity: mlResponse.signals?.phonetic_similarity || 0,
-        identifier_similarity: mlResponse.signals?.identifier_similarity || 0,
-        context_similarity: mlResponse.signals?.context_similarity || 0,
-        embedding_similarity: mlResponse.signals?.embedding_similarity || 0
+        name_similarity: mlResponse.signals?.name_similarity ?? nameSim,
+        phonetic_similarity: mlResponse.signals?.phonetic_similarity ?? phoneSim,
+        identifier_similarity: mlResponse.signals?.identifier_similarity ?? identifierSim,
+        context_similarity: mlResponse.signals?.context_similarity ?? contextSim,
+        embedding_similarity: mlResponse.signals?.embedding_similarity ?? embSim
       },
       has_conflict: hasConflict,
-      auto_merge_allowed: autoMergeAllowed
+      auto_merge_allowed: autoMergeAllowed,
+      ml_status: 'AVAILABLE'
     };
   }
 

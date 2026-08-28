@@ -33,9 +33,6 @@ export class GraphClient {
         headers['X-Correlation-ID'] = context.correlation_id;
       }
 
-      // Legacy fallback
-      headers['Authorization'] = JSON.stringify(context);
-
       const response = await fetch(`${D4_URL}${endpoint}`, {
         method: 'POST',
         headers,

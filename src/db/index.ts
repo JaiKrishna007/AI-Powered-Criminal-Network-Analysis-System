@@ -357,26 +357,69 @@ export class ControlPlaneDB {
       const cand = this.testCandidates.get(review.candidate_id);
       if (cand) {
         cand.status = review.decision;
+        cand.sync_state = review.sync_state;
       }
       return review;
     }
     
     await this.getCollection('entity_review').updateOne(
       { candidate_id: review.candidate_id },
-      { $set: { decision: review.decision, reviewer_id: review.reviewer_id, decided_at: review.decided_at } },
+      { 
+        $set: { 
+          decision: review.decision, 
+          reviewer_id: review.reviewer_id, 
+          decided_at: review.decided_at,
+          sync_state: review.sync_state,
+          sync_error: review.sync_error
+        } 
+      },
       { upsert: true }
     );
     
     const cand = this.testCandidates.get(review.candidate_id);
     if (cand) {
       cand.status = review.decision;
+      cand.sync_state = review.sync_state;
     } else {
       await this.getCollection('candidates').updateOne(
         { id: review.candidate_id },
-        { $set: { status: review.decision } }
+        { 
+          $set: { 
+            status: review.decision,
+            sync_state: review.sync_state
+          } 
+        }
       );
     }
     return review;
+  }
+
+  public async updateEntityReview(candidateId: string, updates: Partial<EntityReview>): Promise<EntityReview | null> {
+    if (this.isTestEnv) {
+      const review = this.testEntityReviews.get(candidateId);
+      if (review) {
+        Object.assign(review, updates);
+      }
+      const cand = this.testCandidates.get(candidateId);
+      if (cand && updates.sync_state) {
+        cand.sync_state = updates.sync_state;
+      }
+      return review || null;
+    }
+
+    await this.getCollection('entity_review').updateOne(
+      { candidate_id: candidateId },
+      { $set: updates }
+    );
+
+    if (updates.sync_state) {
+      await this.getCollection('candidates').updateOne(
+        { id: candidateId },
+        { $set: { sync_state: updates.sync_state } }
+      );
+    }
+
+    return await this.getEntityReview(candidateId);
   }
 
   public async getEntityReview(candidateId: string): Promise<EntityReview | null> {

@@ -163,6 +163,17 @@ function createD4App() {
   app.post('/relationships/:id', handleRelationship);
   app.post('/relationships', handleRelationship);
 
+  app.post('/internal/entities/resolve', (req: Request, res: Response) => {
+    const { candidate_id, decision, canonical_entity } = req.body || {};
+    res.status(200).json({
+      status: 'SUCCESS',
+      synced: true,
+      candidate_id,
+      decision,
+      canonical_entity
+    });
+  });
+
   return app;
 }
 

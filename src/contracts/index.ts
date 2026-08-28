@@ -158,3 +158,15 @@ export const RelationshipResponseSchema = z.object({
   type: z.string(),
   weight: z.number().optional()
 });
+
+// --- 7. ENTITY_RESOLUTION.v1 ---
+export const EntityResolutionEventSchema = z.object({
+  candidate_id: CandidateIdSchema,
+  case_id: CaseIdSchema,
+  decision: z.enum(['ACCEPTED', 'REJECTED', 'DEFERRED']),
+  canonical_entity: EntitySchema.optional(),
+  reviewer_id: UserIdSchema,
+  decided_at: TimestampSchema
+});
+
+export type EntityResolutionEventV1 = z.infer<typeof EntityResolutionEventSchema>;

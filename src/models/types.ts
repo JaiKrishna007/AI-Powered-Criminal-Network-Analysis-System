@@ -44,11 +44,15 @@ export interface CaseMember {
   access_level: string;
 }
 
+export type SyncState = 'SYNC_PENDING' | 'SYNCED' | 'SYNC_FAILED';
+
 export interface EntityReview {
   candidate_id: string;
   decision: 'ACCEPTED' | 'REJECTED' | 'DEFERRED';
   reviewer_id: string;
   decided_at: string; // ISO-8601 UTC
+  sync_state?: SyncState;
+  sync_error?: string | null;
 }
 
 // Internal candidate representation for entity resolution
@@ -73,6 +77,8 @@ export interface EntityCandidate {
   signals: EntitySignals;
   has_conflict: boolean;
   status: ReviewState;
+  ml_status?: 'AVAILABLE' | 'UNAVAILABLE';
+  sync_state?: SyncState;
   candidate_data: any;
   created_at: string;
 }
