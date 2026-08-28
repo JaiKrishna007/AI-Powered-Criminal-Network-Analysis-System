@@ -350,7 +350,35 @@ export class ControlPlaneDB {
   }
 
   // --- 7. Audit Event Reference ---
-  public async createAuditEvent(event: AuditEventRef): Promise<AuditEventRef> {
+  public async getLatestAuditEvent(): Promise<AuditEventRef | null> {
+    if (this.isTestEnv) {
+      const events = Array.from(this.testAuditEvents.values());
+      return events.length > 0 ? events[events.length - 1] : null;
+    }
+    const res = await this.getCollection('audit_event_ref').find({}).sort({ _id: -1 }).limit(1).toArray();
+    if (res.length === 0) return null;
+    const { _id, ...evt } = res[0];
+    return evt as unknown as AuditEventRef;
+  }
+
+  public async createAuditEvent(event: any): Promise<AuditEventRef> {
+    const previousEvent = await this.getLatestAuditEvent();
+    const previousHash = previousEvent ? previousEvent.hash : 'GENESIS';
+    
+    const dataString = JSON.stringify({
+      event_id: event.event_id,
+      actor_id: event.actor_id,
+      case_id: event.case_id,
+      action: event.action
+    });
+    
+    // We dynamically require crypto to avoid top-level import conflicts, or just use the global if available.
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256').update(previousHash + dataString).digest('hex');
+
+    event.previous_hash = previousHash;
+    event.hash = hash;
+
     if (this.isTestEnv) {
       this.testAuditEvents.set(event.event_id, event);
       return event;

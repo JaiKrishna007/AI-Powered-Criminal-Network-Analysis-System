@@ -45,7 +45,7 @@ export class IngestionService {
     }
 
     // 4. Create INGEST.v1 job with state QUEUED
-    const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const jobId = `JOB-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     let job: IngestionJob = {
       id: jobId,
       case_id: payload.case_id,
@@ -86,7 +86,7 @@ export class IngestionService {
     }
 
     // 7. Create evidence record (EVIDENCE.v1)
-    const evidenceId = `ev-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const evidenceId = `EVD-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const evidenceRecord: Evidence = {
       id: evidenceId,
       case_id: payload.case_id,
@@ -155,7 +155,7 @@ export class IngestionService {
           }
         }
 
-        const candId = `cand-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const candId = `CAND-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const candidate: EntityCandidate = {
           id: candId, case_id: payload.case_id, name: rec.name, normalized_name: normName.normalized,
           original_phone: normPhone?.original || null, normalized_phone: normPhone?.normalized || null,

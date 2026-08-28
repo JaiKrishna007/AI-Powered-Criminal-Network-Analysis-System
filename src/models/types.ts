@@ -1,13 +1,30 @@
 // PS26189-CONTRACT-v1 Data Types
 
-export type IngestionJobState = 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-export type ReviewState = 'CANDIDATE' | 'ACCEPTED' | 'REJECTED' | 'DEFERRED';
+import { z } from 'zod';
+import { 
+  UserSchema, 
+  CaseSchema, 
+  EvidenceSchema, 
+  IngestJobSchema, 
+  AuditEventRefSchema,
+  UserV1,
+  CaseV1,
+  EvidenceV1,
+  IngestJobV1,
+  AuditEventRefV1,
+  EntityV1,
+  RelationshipV1,
+  InsightV1
+} from '../contracts';
 
-export interface User {
-  id: string;
-  display_name: string;
-  status: string;
-}
+export type User = z.infer<typeof UserSchema>;
+export type Case = z.infer<typeof CaseSchema>;
+export type Evidence = z.infer<typeof EvidenceSchema>;
+export type IngestionJob = z.infer<typeof IngestJobSchema>;
+export type AuditEventRef = z.infer<typeof AuditEventRefSchema>;
+
+export type IngestionJobState = IngestionJob['state'];
+export type ReviewState = 'CANDIDATE' | 'ACCEPTED' | 'REJECTED' | 'DEFERRED';
 
 export interface Role {
   id: string;
@@ -19,36 +36,10 @@ export interface UserRole {
   role_id: string;
 }
 
-export interface Case {
-  id: string;
-  title: string;
-  status: string;
-  owner_id: string;
-  classification: string;
-}
-
 export interface CaseMember {
   case_id: string;
   user_id: string;
   access_level: string;
-}
-
-export interface Evidence {
-  id: string;
-  case_id: string;
-  source_type: string;
-  source_ref: string;
-  storage_uri: string;
-  sha256: string;
-  classification: string;
-}
-
-export interface IngestionJob {
-  id: string;
-  case_id: string;
-  source_ref: string;
-  state: IngestionJobState;
-  error?: string | null;
 }
 
 export interface EntityReview {
@@ -56,13 +47,6 @@ export interface EntityReview {
   decision: 'ACCEPTED' | 'REJECTED' | 'DEFERRED';
   reviewer_id: string;
   decided_at: string; // ISO-8601 UTC
-}
-
-export interface AuditEventRef {
-  event_id: string;
-  case_id?: string | null;
-  actor_id: string;
-  action: string;
 }
 
 // Internal candidate representation for entity resolution

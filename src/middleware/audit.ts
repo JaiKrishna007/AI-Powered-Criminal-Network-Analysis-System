@@ -26,8 +26,8 @@ export class AuditMiddleware {
         const actorId = authReq.user?.id || 'ANONYMOUS';
         const caseId = req.params.case_id || req.body.case_id || null;
         
-        const eventId = `audit-${Date.now()}-${uuidv4().substring(0, 8)}`;
-        const event: AuditEventRef = {
+        const eventId = `AUD-${Date.now()}-${uuidv4().substring(0, 8)}`;
+        const event: any = {
           event_id: eventId,
           actor_id: actorId,
           case_id: caseId,
@@ -52,8 +52,8 @@ export class AuditMiddleware {
    * Manual audit log utility for non-middleware usage
    */
   public static async logAction(actorId: string, action: string, caseId?: string) {
-    const eventId = `audit-${Date.now()}-${uuidv4().substring(0, 8)}`;
-    const event: AuditEventRef = {
+    const eventId = `AUD-${Date.now()}-${uuidv4().substring(0, 8)}`;
+    const event: any = {
       event_id: eventId,
       actor_id: actorId,
       case_id: caseId || null,

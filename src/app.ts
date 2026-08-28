@@ -31,7 +31,11 @@ app.use(session({
 }));
 
 app.use('/api/auth', authRoutes);
-
+app.get('/api/me', (req, res, next) => {
+  // Delegate to auth routes /me
+  req.url = '/me';
+  authRoutes(req, res, next);
+});
 // Consolidated frozen API contract route
 app.use('/api/cases', casesRoutes);
 app.use('/api/ingestions', ingestionsRoutes);

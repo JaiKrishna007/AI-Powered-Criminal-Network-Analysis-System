@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthMiddleware, AuthenticatedRequest } from '../middleware/auth';
+import { AuditMiddleware } from '../middleware/audit';
 import { db } from '../db';
 import { Case, CaseMember } from '../models/types';
 import { IngestionService } from '../services/ingestion.service';
@@ -111,6 +112,8 @@ router.post('/:case_id/ingestions', AuthMiddleware.requireCaseAccess, async (req
   try {
     const case_id = req.params.case_id;
     const { source_type, source_ref, storage_uri, content, classification } = req.body;
+    
+    await AuditMiddleware.logAction(req.user!.id, 'INGEST_EVIDENCE', case_id);
 
     if (!source_type || !content) {
       return res.status(400).json({ error: 'MISSING_REQUIRED_FIELDS', message: 'source_type and content are required' });
@@ -169,6 +172,8 @@ router.post('/:case_id/entities/resolve', AuthMiddleware.requireCaseAccess, asyn
     }
 
     const review = await EntityReviewService.recordReviewDecision(candidate_id, decision, req.user!.id);
+    await AuditMiddleware.logAction(req.user!.id, 'ENTITY_REVIEW', req.params.case_id);
+    
     return res.status(200).json({ status: 'SUCCESS', review });
   } catch (err: any) {
     return res.status(400).json({ error: 'INVALID_REVIEW_DECISION', message: err.message });

@@ -71,7 +71,7 @@ export const startIngestionWorker = () => {
           }
         }
 
-        const candId = `cand-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const candId = `CAND-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const candidate: EntityCandidate = {
           id: candId,
           case_id: caseId,
