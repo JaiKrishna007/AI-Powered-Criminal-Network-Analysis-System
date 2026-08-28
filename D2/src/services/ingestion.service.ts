@@ -135,7 +135,7 @@ export class IngestionService {
     if (process.env.NODE_ENV !== 'test') {
       const { ingestionQueue } = require('../workers/ingestion.queue');
       const { signAuthContext } = require('../utils/security');
-      const { contextHeader, signatureHeader } = signAuthContext({
+      const authContextPayload = {
         user_id: payload.userContext.user_id,
         actor_id: payload.userContext.actor_id || payload.userContext.user_id,
         role: payload.userContext.role,
@@ -143,7 +143,9 @@ export class IngestionService {
         allowed_case_ids: payload.userContext.allowed_case_ids || [payload.userContext.case_id],
         access_level: payload.userContext.access_level,
         correlation_id: payload.userContext.correlation_id || ''
-      });
+      };
+      
+      const { contextHeader, signatureHeader } = signAuthContext(authContextPayload);
 
       await ingestionQueue.add('ingest', {
         jobId,
@@ -151,9 +153,12 @@ export class IngestionService {
         normalizedType,
         evidenceId,
         storageUri,
-        userContext: payload.userContext,
-        contextHeader,
-        signatureHeader
+        // The explicit HMAC protocol for D2->D3
+        hmac_protocol: {
+          payload: contextHeader, // canonical base64 json
+          signature: signatureHeader,
+          expires_at: Date.now() + 60000 // 60 seconds
+        }
       }, {
         attempts: 3, // Safe retries for transient failures (Task 33)
         backoff: { type: 'exponential', delay: 2000 },

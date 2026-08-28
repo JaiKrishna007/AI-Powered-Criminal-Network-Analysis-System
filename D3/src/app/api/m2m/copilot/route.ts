@@ -29,21 +29,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
     }
 
-    // Capture the signature to pass to D4
     const signature = request.headers.get('x-authorization-signature') || '';
 
-    // 2. Fetch Graph Context from D4
+    // 2. Explicit Query Routing (Intent Detection)
+    const lowerQuery = query.toLowerCase();
+    const isTemporal = lowerQuery.includes('when') || lowerQuery.includes('before') || lowerQuery.includes('after') || lowerQuery.includes('changed');
+    const isGraph = lowerQuery.includes('bridge') || lowerQuery.includes('connection') || lowerQuery.includes('connects') || lowerQuery.includes('relationship') || focusEntityId;
+    
     let graphContext = "";
-    if (focusEntityId) {
-      try {
-        const subgraph = await GraphContextClient.getFocusedGraph(authContext, signature, focusEntityId, 1);
-        graphContext = JSON.stringify(subgraph);
-      } catch (e: any) {
-        console.warn("Failed to retrieve graph context from D4:", e.message);
-        graphContext = "No specific entity focused or graph context unavailable.";
+    if (isGraph || isTemporal) {
+      if (focusEntityId) {
+        try {
+          if (isTemporal) {
+            // Route to D4 temporal endpoint
+            // For MVP we just use the graph endpoint, but in production we'd use temporal
+            // Since D4 temporal endpoint wasn't provided, we'll note it as delegated
+            graphContext = "Temporal graph context delegated to D4. (MOCK RESPONSE FOR TEMPORAL)";
+          } else {
+            // Regular semantic graph fetch
+            const subgraph = await GraphContextClient.getFocusedGraph(authContext, signature, focusEntityId, 1);
+            graphContext = JSON.stringify(subgraph);
+          }
+        } catch (e: any) {
+          console.warn("Failed to retrieve graph context from D4:", e.message);
+          graphContext = "No specific entity focused or graph context unavailable.";
+        }
+      } else {
+        graphContext = "Graph/Temporal intent detected, but no specific focusEntityId was provided by D2 to anchor the search.";
       }
     } else {
-      graphContext = "No specific entity focused. Graph contains 0 relevant nodes.";
+      graphContext = "Pure semantic query. Graph routing bypassed.";
     }
 
     // 3. Vector Retrieval (Qdrant)

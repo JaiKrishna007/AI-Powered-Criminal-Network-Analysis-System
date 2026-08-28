@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/authOptions';
-import connectToDatabase from '@/lib/db/mongodb';
-import { Case } from '@/lib/db/models/Case';
+
+const getD2Url = () => process.env.D2_SERVICE_URL || 'http://localhost:8001';
 
 export async function GET(request: Request) {
   try {
@@ -11,24 +11,26 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
+    // Call D2 backend for case list instead of connecting to MongoDB directly
+    // This removes the duplicate database dependency and respects D2's canonical ownership.
+    const response = await fetch(`${getD2Url()}/api/cases`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        // In a real microservice setup, we'd pass an M2M signed AuthContext or propagate the user session
+        'Authorization': `Bearer ${(session as any).accessToken || ''}`
+      }
+    });
 
-    // Enforce case-level authorization: 
-    // Investigators see their cases, supervisors/admins might see all or based on permissions.
-    // For MVP, we filter by owner_id for INVESTIGATOR role.
-    const query: any = {};
-    const userRole = (session.user as any).role;
-    const userId = (session.user as any).id;
-
-    if (userRole === 'INVESTIGATOR') {
-      query.owner_id = userId;
+    if (!response.ok) {
+      throw new Error(`D2 responded with ${response.status}`);
     }
 
-    const cases = await Case.find(query).sort({ createdAt: -1 }).lean();
-    return NextResponse.json({ cases }, { status: 200 });
+    const data = await response.json();
+    return NextResponse.json({ cases: data.cases || [] }, { status: 200 });
 
   } catch (error: any) {
-    console.error('Error fetching cases:', error);
+    console.error('Error fetching cases from D2:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -41,26 +43,26 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { title, description, classification } = body;
-
-    if (!title) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
-    }
-
-    await connectToDatabase();
-
-    const newCase = await Case.create({
-      title,
-      description,
-      classification: classification || 'CASE_RESTRICTED',
-      owner_id: (session.user as any).id,
-      status: 'OPEN',
+    
+    // Call D2 backend to create case
+    const response = await fetch(`${getD2Url()}/api/cases`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(session as any).accessToken || ''}`
+      },
+      body: JSON.stringify(body)
     });
 
-    return NextResponse.json({ case: newCase }, { status: 201 });
+    if (!response.ok) {
+      throw new Error(`D2 responded with ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: 201 });
 
   } catch (error: any) {
-    console.error('Error creating case:', error);
+    console.error('Error creating case via D2:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

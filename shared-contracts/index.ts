@@ -192,7 +192,13 @@ export const AISearchResultSchema = z.object({
 export const AIResponseSchema = z.object({
   status: z.string().optional(),
   results: z.array(AISearchResultSchema),
-  insights: z.array(InsightSchema).optional()
+  insights: z.array(z.string()).optional()
+});
+
+export const AIResponseV1Schema = z.object({
+  status: z.string(),
+  response: z.string(),
+  grounding: z.array(z.string()).optional()
 });
 
 export const AnomalyResponseSchema = z.object({
@@ -322,6 +328,13 @@ export interface INSIGHT_v1 {
   supporting_entities?: string[];
   evidence_ids: string[];
   timestamp: string; // ISO-8601 UTC
+  insights?: string[];
+}
+
+export interface AI_RESPONSE_v1 {
+  status: string;
+  response: string;
+  grounding?: string[];
 }
 
 export interface LEAD_v1 {

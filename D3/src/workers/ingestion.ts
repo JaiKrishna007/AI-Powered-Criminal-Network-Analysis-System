@@ -16,7 +16,7 @@ console.log('Ingestion Worker starting...');
 
 const worker = new Worker('ingestion', async (job: Job) => {
   // 5. Align BullMQ payload
-  const { jobId, caseId, normalizedType, evidenceId, storageUri, userContext, contextHeader, signatureHeader } = job.data;
+  const { jobId, caseId, normalizedType, evidenceId, storageUri, hmac_protocol } = job.data;
   console.log(`Processing job ${jobId} for evidence ${evidenceId} (${normalizedType})`);
 
   if (!caseId) {
@@ -24,17 +24,21 @@ const worker = new Worker('ingestion', async (job: Job) => {
   }
 
   // 6. Secure BullMQ authorization
-  if (!contextHeader || !signatureHeader) {
-    throw new Error('Unauthorized: Missing auth headers in BullMQ job.');
+  if (!hmac_protocol || !hmac_protocol.payload || !hmac_protocol.signature) {
+    throw new Error('Unauthorized: Missing explicit hmac_protocol in BullMQ job.');
   }
 
-  const isValid = verifyAuthContext(contextHeader, signatureHeader);
+  if (hmac_protocol.expires_at && Date.now() > hmac_protocol.expires_at) {
+    throw new Error('Forbidden: AuthContext payload expired in BullMQ job.');
+  }
+
+  const isValid = verifyAuthContext(hmac_protocol.payload, hmac_protocol.signature);
   if (!isValid) {
-    throw new Error('Forbidden: Invalid or expired AuthContext signature in BullMQ job.');
+    throw new Error('Forbidden: Invalid AuthContext signature in BullMQ job.');
   }
 
   // Validate that the context actually authorizes the caseId
-  const contextJson = Buffer.from(contextHeader, 'base64').toString('utf8');
+  const contextJson = Buffer.from(hmac_protocol.payload, 'base64').toString('utf8');
   const parsedAuth = JSON.parse(contextJson);
   if (parsedAuth.case_id !== caseId && !(parsedAuth.allowed_case_ids || []).includes(caseId)) {
     throw new Error('Forbidden: AuthContext does not authorize this caseId.');

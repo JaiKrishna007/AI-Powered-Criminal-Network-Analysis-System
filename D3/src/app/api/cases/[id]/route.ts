@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/authOptions';
-import connectToDatabase from '@/lib/db/mongodb';
-import { Case } from '@/lib/db/models/Case';
-import mongoose from 'mongoose';
+
+const getD2Url = () => process.env.D2_SERVICE_URL || 'http://localhost:8001';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -13,30 +12,30 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
 
     const caseId = params.id;
-    if (!mongoose.Types.ObjectId.isValid(caseId)) {
+    if (!caseId) {
       return NextResponse.json({ error: 'Invalid Case ID' }, { status: 400 });
     }
 
-    await connectToDatabase();
+    // Call D2 backend for case details
+    const response = await fetch(`${getD2Url()}/api/cases/${caseId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(session as any).accessToken || ''}`
+      }
+    });
 
-    const caseData = await Case.findById(caseId).lean();
-
-    if (!caseData) {
-      return NextResponse.json({ error: 'Case not found' }, { status: 404 });
+    if (!response.ok) {
+      if (response.status === 404) return NextResponse.json({ error: 'Case not found' }, { status: 404 });
+      if (response.status === 403) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      throw new Error(`D2 responded with ${response.status}`);
     }
 
-    // Check case-level authorization
-    const userRole = (session.user as any).role;
-    const userId = (session.user as any).id;
-
-    if (userRole === 'INVESTIGATOR' && caseData.owner_id.toString() !== userId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    return NextResponse.json({ case: caseData }, { status: 200 });
+    const data = await response.json();
+    return NextResponse.json(data, { status: 200 });
 
   } catch (error: any) {
-    console.error(`Error fetching case ${params.id}:`, error);
+    console.error(`Error fetching case ${params.id} via D2:`, error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
