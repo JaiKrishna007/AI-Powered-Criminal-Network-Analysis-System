@@ -1,16 +1,56 @@
 # AI-Powered Criminal Network Analysis System (Backend)
 
-This repository contains the `D2` Control Plane Backend for the AI-Powered Criminal Network Analysis System.
-It strictly adheres to the PS26189 Developer 2 API Contract.
+This repository contains the **D2 Control Plane Backend** for the AI-Powered Criminal Network Analysis System.
+It strictly adheres to the frozen `PS26189 Developer 2 API Contract`.
 
-## Architecture
-The system is divided into functional boundaries:
-- **D2 (This Repo)**: Orchestrates the API, authentication, authorization, evidence ingestion, auditing, and entity state control.
-- **D3 (Mocked/External)**: Intelligence, Embeddings, RAG, and LLM Copilot operations.
-- **D4 (Mocked/External)**: Graph Analytics, Temporal analytics, and visual layout.
+## System Architecture & Boundaries
+
+The architecture maintains strict boundaries across microservices:
+- **D2 (This Repo — Control Plane Backend)**:
+  - Orchestrates core REST APIs (`/api/cases`, `/api/ingestions`, `/api/relationships`, `/api/reports`, `/api/evidence`, `/api/admin`, `/api/auth`).
+  - Manages secure user authentication, RBAC authorization, case scoping, and multi-level classification clearance.
+  - Owns MongoDB (control plane state, metadata, evidence registry, case membership) and Redis (session store & BullMQ async queues).
+  - Owns evidence ingestion pipeline, deterministic entity/relationship extraction, and cryptographic SHA-256 integrity verification.
+  - **Zero Direct Database Coupling**: D2 does **not** connect directly to Qdrant, Neo4j, or Ollama. All intelligence and graph operations are delegated via signed HTTP microservice contracts.
+- **D3 (Intelligence & Copilot Microservice)**:
+  - Owns vector embeddings, Qdrant vector database, RAG, and LLM Copilot operations (Ollama).
+- **D4 (Graph Analytics Microservice)**:
+  - Owns Neo4j graph database, graph path analysis, betweenness centrality bridges, and temporal timeline clustering.
+- **ML (Predictive Analytics Microservice)**:
+  - Owns machine learning entity matching and anomalous behavior detection.
+
+## Microservice Integration Contracts
+
+All inter-service HTTP requests from D2 are authenticated using cryptographically signed headers:
+- `X-Authorization-Context`: JSON containing `user_id`, `role`, `case_id`, and `access_level`.
+- `X-Authorization-Signature`: HMAC-SHA256 signature generated with `INTERNAL_SERVICE_SECRET`.
+- `X-Correlation-ID`: Audit correlation identifier.
+
+### D3 Service Endpoints (`D3_SERVICE_URL`)
+- `POST /search` — Semantic multi-modal search across case evidence.
+- `POST /copilot` — AI Copilot grounded Q&A and risk synthesis.
+- `POST /leads` — Actionable investigative lead generation.
+
+### D4 Service Endpoints (`D4_SERVICE_URL`)
+- `POST /graph/focused` — Ego-network subgraphs centered on target entities.
+- `POST /graph/path` — Shortest path and relational chain discovery between nodes.
+- `POST /analytics/bridge` — Structural bridge entity detection via betweenness centrality.
+- `POST /analytics/temporal` — Time-series communication cadence and cluster detection.
+- `POST /relationships/batch` — Bulk relationship ingestion into Neo4j (`CALLED`, `TRANSFERRED_MONEY`, `USED`, `VISITED`, `MET_AT`, `LINKED_TO`).
+- `POST /internal/entities/resolve` (`ENTITY_RESOLUTION.v1`) — Canonical entity resolution synchronization.
+
+### ML Service Endpoints (`ML_SERVICE_URL`)
+- `POST /predict/entity-match` — Entity resolution match probability and explainable signal breakdown.
+- `POST /predict/anomaly` — Structural anomaly scoring and suspicious activity flagging.
+
+## Resilience & Graceful Degradation Policy
+
+> [!IMPORTANT]
+> **Zero Intelligence Fabrication Policy**:
+> D2 fails gracefully when ML, D3, or D4 microservices are unavailable. It **never fabricates** intelligence results or synthetic match scores. Unavailable analysis is explicitly reported as an `UNAVAILABLE` state, ensuring officers are never presented with artificial probabilities.
 
 ## Prerequisites
-- Node.js (v18+)
+- Node.js (v20+)
 - Docker & Docker Compose
 - Vitest
 
@@ -21,53 +61,36 @@ cd AI-Powered-Criminal-Network-Analysis-System-backend
 npm install
 ```
 
-## Environment Variables
-Create a `.env` file based on the provided `.env.example`:
+## Environment Configuration
+Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-Ensure you have set `MONGODB_URI` and `SESSION_SECRET` correctly.
+Ensure you have set `MONGODB_URI`, `SESSION_SECRET`, and `INTERNAL_SERVICE_SECRET`.
 
-## MongoDB Setup
-By default, the application will initialize its own required collections and indexes in MongoDB upon connecting. 
-The database uses `netra` as the default database name.
-
-## Running Infrastructure with Docker Compose
-The system relies on MongoDB, Neo4j, Redis, and Qdrant. You can spin these up using:
+## Running with Docker Compose
+To launch the complete environment (Backend, MongoDB, Redis, and mock D3/D4/ML services):
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-## Running the Backend
-To start the backend in development mode:
+## Running the Backend Locally
 ```bash
+# Development mode with live reload
 npm run dev
-```
 
-To build and run in production:
-```bash
+# Production build and start
 npm run build
 npm start
 ```
 
 ## Running Tests
-Tests are executed using Vitest, which handles testing logic, integration, and mocking.
 ```bash
 npm test
 ```
-
-## Synthetic Dataset & Demo
-A deterministic test fixture dataset is used in the `tests/fixtures.test.ts` to simulate Case 1042, Case 101, etc.
-For the Two-Laptop Demo, one laptop runs the Backend (this repo) + MongoDB/Redis, and the other laptop runs the Frontend or Graph client.
-
-### Reset Procedure
-To completely wipe and reset the local backend state:
-1. Stop the backend server.
-2. Run `docker-compose down -v` to wipe all databases and volumes.
-3. Restart `docker-compose up -d`.
-4. Run `npm run start` to automatically seed the default test roles and users on boot.
-
-## Troubleshooting
-- **Build Errors**: Check for `target: ES2022` mismatches or missing `@types`. Run `npm run build` to verify typings.
-- **Worker Hangs**: Ensure Redis is reachable and the `BullMQ` configuration in `worker/ingestion.queue.ts` points to the correct host.
-- **ML/D4 Failures**: Since D3/D4 are separate repos, if they are down, D2 is designed to fail gracefully with mock/fallback probabilities.
+The test suite executes:
+- **Contract Verification Tests** (`tests/contract_verification.test.ts`): Verifies D2 $\rightarrow$ D3/D4/ML schemas and signatures.
+- **Fixture Tests** (`tests/fixtures.test.ts`): BE-T01 through BE-T07 regression fixtures.
+- **Reports & Mocks Tests** (`tests/reports_and_mocks.test.ts`): 16-section PDF reports and downstream resilience.
+- **Security & Authorization Tests** (`tests/security_and_resilience.test.ts`): Cross-case isolation, pre-downstream authorization enforcement, and sync retries.
+- **E2E Integration** (`tests/integration/e2e.test.ts`): Complete upload $\rightarrow$ ingest $\rightarrow$ resolve $\rightarrow$ report workflow.

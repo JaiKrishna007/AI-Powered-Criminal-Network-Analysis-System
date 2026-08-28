@@ -54,19 +54,41 @@ export class ReportService {
     };
     report = await db.createReport(report);
 
-    // Fetch case data and compile asynchronously
-    this.compileReportContent(reportId, caseObj, filePath, userContext, version, params).catch(async (e: any) => {
-      console.error(`Failed to generate report ${reportId}:`, e);
-      await db.updateReport(reportId, {
-        status: 'FAILED',
-        error: e.message || 'Report generation failed'
+    // Queue with BullMQ when available, or process asynchronously in background
+    const { reportQueue } = await import('../workers/report.queue.js');
+    if (reportQueue && process.env.NODE_ENV !== 'test') {
+      try {
+        await reportQueue.add('generateReport', {
+          reportId,
+          caseId,
+          userContext,
+          version,
+          params
+        });
+      } catch (err: any) {
+        console.warn(`Failed to enqueue report to BullMQ, falling back to in-process execution: ${err.message}`);
+        this.compileReportDirectly(reportId, caseObj, filePath, userContext, version, params).catch(async (e: any) => {
+          console.error(`Failed to generate report ${reportId}:`, e);
+          await db.updateReport(reportId, {
+            status: 'FAILED',
+            error: e.message || 'Report generation failed'
+          });
+        });
+      }
+    } else {
+      this.compileReportDirectly(reportId, caseObj, filePath, userContext, version, params).catch(async (e: any) => {
+        console.error(`Failed to generate report ${reportId}:`, e);
+        await db.updateReport(reportId, {
+          status: 'FAILED',
+          error: e.message || 'Report generation failed'
+        });
       });
-    });
+    }
 
     return report;
   }
 
-  private static async compileReportContent(
+  public static async compileReportDirectly(
     reportId: string,
     caseObj: any,
     filePath: string,

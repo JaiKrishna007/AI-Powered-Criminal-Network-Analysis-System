@@ -553,6 +553,10 @@ export class ControlPlaneDB {
     return candidate;
   }
 
+  public async createCandidate(candidate: EntityCandidate): Promise<EntityCandidate> {
+    return this.saveCandidate(candidate);
+  }
+
   public async getCandidate(id: string): Promise<EntityCandidate | null> {
     if (this.isTestEnv) {
       return this.testCandidates.get(id) || null;

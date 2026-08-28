@@ -1,6 +1,7 @@
 import app from './app';
 import { db } from './db';
 import { startIngestionWorker } from './workers/ingestion.queue';
+import { startReportWorker } from './workers/report.queue';
 import { ExtractionService } from './services/extraction.service';
 import { DefaultExtractionWorker } from './workers/extraction_worker.adapter';
 
@@ -15,7 +16,8 @@ async function start() {
 
     if (process.env.NODE_ENV !== 'test') {
       startIngestionWorker();
-      console.log('Started BullMQ Ingestion Worker');
+      startReportWorker();
+      console.log('Started BullMQ Ingestion & Report Workers');
     }
 
     app.listen(PORT, () => {
