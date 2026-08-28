@@ -12,7 +12,7 @@ import {
   AuthContext,
   RelationshipType,
 } from "../contracts/types.js";
-import { GraphStore } from "./store.js";
+import { GraphRepository } from "./repository.js";
 
 export interface FocusedSubgraphOptions {
   case_id: string;
@@ -25,12 +25,12 @@ export interface FocusedSubgraphOptions {
 }
 
 export class FocusedSubgraphExtractor {
-  constructor(private store: GraphStore) {}
+  constructor(private store: GraphRepository) {}
 
-  public extractFocusedSubgraph(
+  public async extractFocusedSubgraph(
     options: FocusedSubgraphOptions,
     auth?: AuthContext
-  ): GRAPH_v1 {
+  ): Promise<GRAPH_v1> {
     const {
       case_id,
       seed_ids,
@@ -46,11 +46,12 @@ export class FocusedSubgraphExtractor {
       throw new Error(`Unauthorized access to case_id: ${case_id}`);
     }
 
-    const caseEntities = this.store.getAllEntitiesForCase(case_id);
+    // Fix Issue 5: propagate authorization context downwards
+    const caseEntities = await this.store.getAllEntitiesForCase(case_id, auth);
     const caseEntityMap = new Map(caseEntities.map((e) => [e.id, e]));
 
     // Filter relationships based on time limits and relationship types
-    let caseEdges = this.store.getAllRelationshipsForCase(case_id);
+    let caseEdges = await this.store.getAllRelationshipsForCase(case_id, auth);
 
     if (rel_types && rel_types.length > 0) {
       const typeSet = new Set(rel_types);
@@ -59,10 +60,24 @@ export class FocusedSubgraphExtractor {
 
     if (time_start || time_end) {
       caseEdges = caseEdges.filter((e) => {
-        if (!e.event_time) return false; // Exclude or require explicit timestamp when time filter applied
-        if (time_start && e.event_time < time_start) return false;
-        if (time_end && e.event_time > time_end) return false;
-        return true;
+        const edgeStart = e.event_time || e.effective_start || e.valid_from || (e.properties && (e.properties.effective_start || e.properties.valid_from));
+        const edgeEnd = e.effective_end || e.valid_to || (e.properties && (e.properties.effective_end || e.properties.valid_to));
+        
+        if (!edgeStart && !edgeEnd) return false; // Exclude unknown timestamps
+
+        if (e.event_time) {
+          if (time_start && e.event_time < time_start) return false;
+          if (time_end && e.event_time > time_end) return false;
+          return true;
+        }
+
+        if (edgeStart) {
+          const startValid = !time_start || (edgeEnd ? edgeEnd >= time_start : edgeStart >= time_start);
+          const endValid = !time_end || edgeStart <= time_end;
+          return startValid && endValid;
+        }
+
+        return false;
       });
     }
 
@@ -112,23 +127,55 @@ export class FocusedSubgraphExtractor {
       .map((id) => caseEntityMap.get(id)!)
       .filter(Boolean);
 
-    // Calculate node degrees for deterministic ranking
+    // Calculate node degrees and other relevance factors for scoring
     const nodeDegreeMap = new Map<string, number>();
+    const nodeEvidenceMap = new Map<string, number>();
+    const recentActivityMap = new Map<string, number>();
+
+    const nowTime = new Date().getTime();
+
     for (const edge of traversedEdgesMap.values()) {
       nodeDegreeMap.set(edge.source, (nodeDegreeMap.get(edge.source) || 0) + 1);
       nodeDegreeMap.set(edge.target, (nodeDegreeMap.get(edge.target) || 0) + 1);
+
+      const evCount = (edge.evidence_ids?.length || 0);
+      nodeEvidenceMap.set(edge.source, (nodeEvidenceMap.get(edge.source) || 0) + evCount);
+      nodeEvidenceMap.set(edge.target, (nodeEvidenceMap.get(edge.target) || 0) + evCount);
+
+      if (edge.event_time) {
+        const edgeTime = new Date(edge.event_time).getTime();
+        const daysOld = Math.max(0, (nowTime - edgeTime) / (1000 * 3600 * 24));
+        const temporalScore = Math.max(0, 10 - daysOld); // Simple temporal relevance decay
+        recentActivityMap.set(edge.source, (recentActivityMap.get(edge.source) || 0) + temporalScore);
+        recentActivityMap.set(edge.target, (recentActivityMap.get(edge.target) || 0) + temporalScore);
+      }
     }
 
-    // Rank nodes deterministically: primary sort by seed distance (asc), secondary by degree (desc), tertiary by ID (asc)
+    // Fix Issue 6: Comprehensive relevance scoring for deterministic ranking
+    // score = seed_proximity (inverse distance) + centrality + evidence_density + temporal_relevance
     allTraversedNodes.sort((a, b) => {
       const distA = nodeDistanceMap.get(a.id) ?? Infinity;
       const distB = nodeDistanceMap.get(b.id) ?? Infinity;
-      if (distA !== distB) return distA - distB;
 
-      const degA = nodeDegreeMap.get(a.id) ?? 0;
-      const degB = nodeDegreeMap.get(b.id) ?? 0;
-      if (degA !== degB) return degB - degA;
+      // Calculate relevance score
+      const proximityScoreA = distA === 0 ? 100 : (10 / distA);
+      const proximityScoreB = distB === 0 ? 100 : (10 / distB);
+      
+      const scoreA = proximityScoreA 
+        + (nodeDegreeMap.get(a.id) ?? 0) 
+        + (nodeEvidenceMap.get(a.id) ?? 0) 
+        + (recentActivityMap.get(a.id) ?? 0);
+        
+      const scoreB = proximityScoreB 
+        + (nodeDegreeMap.get(b.id) ?? 0) 
+        + (nodeEvidenceMap.get(b.id) ?? 0) 
+        + (recentActivityMap.get(b.id) ?? 0);
 
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA; // Descending order of relevance
+      }
+
+      // Tiebreaker: deterministic by ID
       return a.id.localeCompare(b.id);
     });
 

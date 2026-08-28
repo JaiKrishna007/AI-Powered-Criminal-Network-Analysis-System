@@ -25,21 +25,27 @@ export interface IncidentWindowOptions {
 export class TemporalEngine {
   constructor(private store: GraphStore) {}
 
+  private getEdgeStart(e: any): string | undefined {
+    return e.event_time || e.effective_start || e.valid_from || (e.properties && (e.properties.effective_start || e.properties.valid_from));
+  }
+
+  private getEdgeEnd(e: any): string | undefined {
+    return e.effective_end || e.valid_to || (e.properties && (e.properties.effective_end || e.properties.valid_to));
+  }
+
   /**
-   * Returns graph state at time T (active relationships where event_time <= T,
-   * or effective_start <= T and (effective_end is undefined or >= T)).
+   * Returns graph state at time T (active relationships where start <= T,
+   * and end is undefined or >= T).
    * Relationships without timestamps are classified as UNKNOWN and excluded from strict time snapshot.
    */
-  public getSnapshotAt(caseId: string, timestamp: string): GRAPH_v1 {
-    const caseNodes = this.store.getAllEntitiesForCase(caseId);
-    const caseEdges = this.store.getAllRelationshipsForCase(caseId);
-
-    let unknownTimestampsCount = 0;
+  public async getSnapshotAt(caseId: string, timestamp: string): Promise<GRAPH_v1> {
+    const caseNodes = await this.store.getAllEntitiesForCase(caseId);
+    const caseEdges = await this.store.getAllRelationshipsForCase(caseId);
 
     const activeEdges = caseEdges.filter((e) => {
-      const edgeTime = e.event_time || e.effective_start;
-      if (!edgeTime) {
-        unknownTimestampsCount++;
+      const start = this.getEdgeStart(e);
+      const end = this.getEdgeEnd(e);
+      if (!start && !end) {
         return false; // Unknown timestamp
       }
 
@@ -47,9 +53,9 @@ export class TemporalEngine {
         return e.event_time <= timestamp;
       }
 
-      if (e.effective_start) {
-        const startValid = e.effective_start <= timestamp;
-        const endValid = !e.effective_end || e.effective_end >= timestamp;
+      if (start) {
+        const startValid = start <= timestamp;
+        const endValid = !end || end >= timestamp;
         return startValid && endValid;
       }
 
@@ -79,13 +85,13 @@ export class TemporalEngine {
   /**
    * Compares graph states at T1 and T2 to calculate ADDED, REMOVED, and CHANGED relationships.
    */
-  public compareSnapshots(
+  public async compareSnapshots(
     caseId: string,
     time1: string,
     time2: string
-  ): TemporalDiffResult {
-    const snap1 = this.getSnapshotAt(caseId, time1);
-    const snap2 = this.getSnapshotAt(caseId, time2);
+  ): Promise<TemporalDiffResult> {
+    const snap1 = await this.getSnapshotAt(caseId, time1);
+    const snap2 = await this.getSnapshotAt(caseId, time2);
 
     const map1 = new Map(snap1.edges.map((e) => [e.id, e]));
     const map2 = new Map(snap2.edges.map((e) => [e.id, e]));
@@ -113,9 +119,9 @@ export class TemporalEngine {
       }
     }
 
-    const allEdges = this.store.getAllRelationshipsForCase(caseId);
+    const allEdges = await this.store.getAllRelationshipsForCase(caseId);
     const unknownCount = allEdges.filter(
-      (e) => !e.event_time && !e.effective_start
+      (e) => !this.getEdgeStart(e) && !this.getEdgeEnd(e)
     ).length;
 
     return {
@@ -129,21 +135,21 @@ export class TemporalEngine {
   /**
    * Filter relationships within [T - before, T + after] incident window.
    */
-  public getIncidentWindowGraph(options: IncidentWindowOptions): GRAPH_v1 {
+  public async getIncidentWindowGraph(options: IncidentWindowOptions): Promise<GRAPH_v1> {
     const { case_id, anchor_time, before_ms, after_ms } = options;
 
     const anchorMs = new Date(anchor_time).getTime();
     const windowStartMs = anchorMs - before_ms;
     const windowEndMs = anchorMs + after_ms;
 
-    const caseNodes = this.store.getAllEntitiesForCase(case_id);
-    const caseEdges = this.store.getAllRelationshipsForCase(case_id);
+    const caseNodes = await this.store.getAllEntitiesForCase(case_id);
+    const caseEdges = await this.store.getAllRelationshipsForCase(case_id);
 
     const windowEdges = caseEdges.filter((e) => {
-      const tStr = e.event_time || e.effective_start;
-      if (!tStr) return false;
-      const tMs = new Date(tStr).getTime();
-      return tMs >= windowStartMs && tMs <= windowEndMs;
+      const startStr = this.getEdgeStart(e);
+      if (!startStr) return false;
+      const startMs = new Date(startStr).getTime();
+      return startMs >= windowStartMs && startMs <= windowEndMs;
     });
 
     const windowNodeIds = new Set<string>();

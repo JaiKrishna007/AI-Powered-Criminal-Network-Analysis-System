@@ -22,11 +22,11 @@ export class EvidenceVerifier {
   /**
    * Verifies stored evidence hash against computed content hash.
    */
-  public verifyEvidence(
+  public async verifyEvidence(
     evidence: EVIDENCE_v1,
     content: string | Uint8Array,
     auth?: AuthContext
-  ): { status: "VERIFIED" | "MISMATCH"; computedHash: string; storedHash: string } {
+  ): Promise<{ status: "VERIFIED" | "MISMATCH"; computedHash: string; storedHash: string }> {
     const computedHash = this.computeSha256(content);
     const storedHash = evidence.sha256_hash || evidence.stored_hash || "";
 
@@ -34,7 +34,7 @@ export class EvidenceVerifier {
     const status = isMatch ? "VERIFIED" : "MISMATCH";
 
     if (auth) {
-      this.auditLogger.log(
+      await this.auditLogger.log(
         auth.actor_id,
         "VERIFY_EVIDENCE",
         "EVIDENCE",

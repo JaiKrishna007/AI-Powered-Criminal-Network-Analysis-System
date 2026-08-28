@@ -9,22 +9,26 @@ import joblib
 app = FastAPI(
     title="AI Criminal Network Analysis API — ML & Graph Subsystem",
     version="1.0.0",
-    description="Integrated API exposing ML models (Entity Resolution, Anomaly Detection), Graph Analytics (Bounded GRAPH.v1), Insight Fusion (INSIGHT.v1), and RAG/Copilot Context."
+    description="Integrated API exposing ML models (Entity Resolution, Anomaly Detection)."
 )
 
 # ---------------------------------------------------------------------
 # 1. LOAD PRE-TRAINED ML MODELS
 # ---------------------------------------------------------------------
 er_model = xgb.XGBClassifier()
+MODELS_LOADED = True
+
 try:
     er_model.load_model('models/entity_resolution.json')
 except Exception as e:
     print(f"Warning: Could not load entity_resolution.json: {e}")
+    MODELS_LOADED = False
 
 try:
     anomaly_model = joblib.load('models/anomaly_model.pkl')
 except Exception as e:
     print(f"Warning: Could not load anomaly_model.pkl: {e}")
+    MODELS_LOADED = False
 
 
 # ---------------------------------------------------------------------
@@ -52,6 +56,9 @@ class ActivityRequest(BaseModel):
 @app.post("/predict/entity-match", summary="ML Entity Match Prediction")
 @app.post("/api/v1/resolve", summary="Level 1 Entity Resolution Endpoint")
 def resolve_entity(req: EntityPairRequest):
+    if not MODELS_LOADED:
+        raise HTTPException(status_code=503, detail="MODEL_UNAVAILABLE")
+        
     features = pd.DataFrame([{
         'name_similarity': req.name_sim,
         'address_similarity': req.address_sim,
@@ -86,10 +93,15 @@ def resolve_entity(req: EntityPairRequest):
 @app.post("/predict/anomaly", summary="ML Behavioral Anomaly Prediction")
 @app.post("/api/v1/analyze_behavior", summary="Level 1 Behavior Anomaly Endpoint")
 def analyze_behavior(req: ActivityRequest):
+    if not MODELS_LOADED:
+        raise HTTPException(status_code=503, detail="MODEL_UNAVAILABLE")
+
     features = pd.DataFrame([[req.calls, req.transactions, req.amount]], 
                             columns=['calls_per_day', 'transactions', 'transaction_amount'])
     
     raw_score = anomaly_model.decision_function(features)[0]
+    
+    # Issue 21: Added calibration metadata and returned baseline/limitations
     min_s, max_s = -0.15, 0.05 
     severity = float(np.clip((1 - (raw_score - min_s) / (max_s - min_s)), 0, 1))
     
@@ -102,12 +114,19 @@ def analyze_behavior(req: ActivityRequest):
         "model_version": "v1.0",
         "entity_id": req.entity_id,
         "score": round(severity, 4),
+        "baseline": {
+            "calibration_min": min_s,
+            "calibration_max": max_s,
+            "raw_decision_score": round(float(raw_score), 4)
+        },
         "status": status,
         "signals": {
             "communication_spike": comm_spike,
             "transaction_spike": txn_spike,
             "location_change": False
-        }
+        },
+        "limitations": [
+            "Score calibration (-0.15 to 0.05) is estimated based on hackathon prototype data.",
+            "Severity is capped at 1.0 (saturation may occur for extreme outliers)."
+        ]
     }
-
-

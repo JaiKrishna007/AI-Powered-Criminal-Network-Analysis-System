@@ -26,7 +26,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
 
   beforeEach(() => {
     auditLogger = new AuditLogger();
-    store = new GraphStore(auditLogger);
+    store = new GraphStore(auditLogger, undefined, true); // Force InMemory for testing
   });
 
   /**
@@ -34,7 +34,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * Expected: X identified as POTENTIAL_BRIDGE candidate.
    * Internal path nodes B, C, F, G are NOT labeled as bridges.
    */
-  it("GT-T01: Two clusters + connector D-X-E uniquely identifies X as POTENTIAL_BRIDGE", () => {
+  it("GT-T01: Two clusters + connector D-X-E uniquely identifies X as POTENTIAL_BRIDGE", async () => {
     // Cluster A: A-B, B-C, C-D
     const nodesA: ENTITY_v1[] = [
       { id: "A", type: "Person", case_id: "CASE-001" },
@@ -52,7 +52,9 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     // Bridge X
     const nodeX: ENTITY_v1 = { id: "X", type: "Person", case_id: "CASE-001" };
 
-    [...nodesA, ...nodesB, nodeX].forEach((n) => store.addEntity(n, auth));
+    for (const n of [...nodesA, ...nodesB, nodeX]) {
+      await store.addEntity(n, auth);
+    }
 
     const edges: REL_v1[] = [
       // Cluster A edges
@@ -68,11 +70,13 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
       { id: "r_xe", source: "X", target: "E", type: "ASSOCIATED_WITH", case_id: "CASE-001", evidence_ids: ["ev3"] },
     ];
 
-    edges.forEach((e) => store.addRelationship(e, auth));
+    for (const e of edges) {
+      await store.addRelationship(e, auth);
+    }
 
     const bridgeDetector = new BridgeDetector();
-    const allEntities = store.getAllEntitiesForCase("CASE-001", auth);
-    const allRels = store.getAllRelationshipsForCase("CASE-001", auth);
+    const allEntities = await store.getAllEntitiesForCase("CASE-001", auth);
+    const allRels = await store.getAllRelationshipsForCase("CASE-001", auth);
 
     const insights = bridgeDetector.detectBridges("CASE-001", allEntities, allRels);
 
@@ -92,7 +96,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T02: Single dense cluster.
    * Expected: No false positive bridge candidate.
    */
-  it("GT-T02: Single dense cluster does not produce false positive bridge", () => {
+  it("GT-T02: Single dense cluster does not produce false positive bridge", async () => {
     const denseNodes: ENTITY_v1[] = [
       { id: "P1", type: "Person", case_id: "CASE-001" },
       { id: "P2", type: "Person", case_id: "CASE-001" },
@@ -100,7 +104,9 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
       { id: "P4", type: "Person", case_id: "CASE-001" },
     ];
 
-    denseNodes.forEach((n) => store.addEntity(n, auth));
+    for (const n of denseNodes) {
+      await store.addEntity(n, auth);
+    }
 
     // Fully connected clique
     const edges: REL_v1[] = [
@@ -112,13 +118,15 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
       { id: "e34", source: "P3", target: "P4", type: "CALLED", case_id: "CASE-001", evidence_ids: ["ev1"] },
     ];
 
-    edges.forEach((e) => store.addRelationship(e, auth));
+    for (const e of edges) {
+      await store.addRelationship(e, auth);
+    }
 
     const bridgeDetector = new BridgeDetector();
     const insights = bridgeDetector.detectBridges(
       "CASE-001",
-      store.getAllEntitiesForCase("CASE-001", auth),
-      store.getAllRelationshipsForCase("CASE-001", auth)
+      await store.getAllEntitiesForCase("CASE-001", auth),
+      await store.getAllRelationshipsForCase("CASE-001", auth)
     );
 
     expect(insights.length).toBe(0);
@@ -128,12 +136,12 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T03: Edge added after T1.
    * Expected: Diff detects edge as ADDED.
    */
-  it("GT-T03: Temporal diff correctly identifies ADDED edge between T1 and T2", () => {
-    store.addEntity({ id: "N1", type: "Person", case_id: "CASE-001" }, auth);
-    store.addEntity({ id: "N2", type: "Phone", case_id: "CASE-001" }, auth);
+  it("GT-T03: Temporal diff correctly identifies ADDED edge between T1 and T2", async () => {
+    await store.addEntity({ id: "N1", type: "Person", case_id: "CASE-001" }, auth);
+    await store.addEntity({ id: "N2", type: "Phone", case_id: "CASE-001" }, auth);
 
     // Edge active starting T2
-    store.addRelationship(
+    await store.addRelationship(
       {
         id: "rel_added",
         source: "N1",
@@ -147,7 +155,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     );
 
     const temporalEngine = new TemporalEngine(store);
-    const diff = temporalEngine.compareSnapshots(
+    const diff = await temporalEngine.compareSnapshots(
       "CASE-001",
       "2026-08-01T00:00:00Z",
       "2026-08-03T00:00:00Z"
@@ -161,12 +169,12 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T04: Edge removed before T2.
    * Expected: Absent from T2 snapshot / marked as REMOVED.
    */
-  it("GT-T04: Temporal diff correctly identifies REMOVED edge between T1 and T2", () => {
-    store.addEntity({ id: "N1", type: "Person", case_id: "CASE-001" }, auth);
-    store.addEntity({ id: "N2", type: "Phone", case_id: "CASE-001" }, auth);
+  it("GT-T04: Temporal diff correctly identifies REMOVED edge between T1 and T2", async () => {
+    await store.addEntity({ id: "N1", type: "Person", case_id: "CASE-001" }, auth);
+    await store.addEntity({ id: "N2", type: "Phone", case_id: "CASE-001" }, auth);
 
     // Relationship effective only up to T1
-    store.addRelationship(
+    await store.addRelationship(
       {
         id: "rel_removed",
         source: "N1",
@@ -181,10 +189,10 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     );
 
     const temporalEngine = new TemporalEngine(store);
-    const snapT2 = temporalEngine.getSnapshotAt("CASE-001", "2026-08-02T00:00:00Z");
+    const snapT2 = await temporalEngine.getSnapshotAt("CASE-001", "2026-08-02T00:00:00Z");
     expect(snapT2.edges.find((e) => e.id === "rel_removed")).toBeUndefined();
 
-    const diff = temporalEngine.compareSnapshots(
+    const diff = await temporalEngine.compareSnapshots(
       "CASE-001",
       "2026-08-01T06:00:00Z",
       "2026-08-02T00:00:00Z"
@@ -197,13 +205,13 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T05: Large neighborhood extraction truncation.
    * Expected: meta.truncated === true.
    */
-  it("GT-T05: Bounded focused subgraph sets meta.truncated === true when node bounds exceeded", () => {
+  it("GT-T05: Bounded focused subgraph sets meta.truncated === true when node bounds exceeded", async () => {
     // Add 15 entities and a chain of relationships
     for (let i = 1; i <= 15; i++) {
-      store.addEntity({ id: `Node_${i}`, type: "Person", case_id: "CASE-001" }, auth);
+      await store.addEntity({ id: `Node_${i}`, type: "Person", case_id: "CASE-001" }, auth);
     }
     for (let i = 1; i < 15; i++) {
-      store.addRelationship(
+      await store.addRelationship(
         {
           id: `Edge_${i}`,
           source: `Node_${i}`,
@@ -216,8 +224,8 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
       );
     }
 
-    const extractor = new FocusedSubgraphExtractor(store);
-    const result = extractor.extractFocusedSubgraph(
+    const extractor = new FocusedSubgraphExtractor(store as any);
+    const result = await extractor.extractFocusedSubgraph(
       {
         case_id: "CASE-001",
         seed_ids: ["Node_1"],
@@ -236,7 +244,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T06: Unchanged evidence artifact verification.
    * Expected: VERIFIED and AUDIT event emitted.
    */
-  it("GT-T06: Unchanged evidence artifact returns VERIFIED and logs AUDIT event", () => {
+  it("GT-T06: Unchanged evidence artifact returns VERIFIED and logs AUDIT event", async () => {
     const verifier = new EvidenceVerifier(auditLogger);
     const content = "Confidential evidence raw binary data payload";
     const computedHash = verifier.computeSha256(content);
@@ -250,10 +258,10 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
       created_at: new Date().toISOString(),
     };
 
-    const res = verifier.verifyEvidence(evidence, content, auth);
+    const res = await verifier.verifyEvidence(evidence, content, auth);
     expect(res.status).toBe("VERIFIED");
 
-    const auditLogs = auditLogger.getLogs();
+    const auditLogs = await auditLogger.getLogs();
     const evAudit = auditLogs.find((l) => l.resource_id === "EV-101");
     expect(evAudit).toBeDefined();
     expect(evAudit?.outcome).toBe("SUCCESS");
@@ -264,7 +272,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T07: Modified evidence artifact verification.
    * Expected: MISMATCH and AUDIT event emitted.
    */
-  it("GT-T07: Modified evidence artifact returns MISMATCH and logs AUDIT event", () => {
+  it("GT-T07: Modified evidence artifact returns MISMATCH and logs AUDIT event", async () => {
     const verifier = new EvidenceVerifier(auditLogger);
     const originalContent = "Original evidence file data";
     const originalHash = verifier.computeSha256(originalContent);
@@ -279,10 +287,10 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     };
 
     const tamperedContent = "Original evidence file data [TAMPERED]";
-    const res = verifier.verifyEvidence(evidence, tamperedContent, auth);
+    const res = await verifier.verifyEvidence(evidence, tamperedContent, auth);
     expect(res.status).toBe("MISMATCH");
 
-    const auditLogs = auditLogger.getLogs();
+    const auditLogs = await auditLogger.getLogs();
     const evAudit = auditLogs.find((l) => l.resource_id === "EV-102");
     expect(evAudit).toBeDefined();
     expect(evAudit?.outcome).toBe("ERROR");
@@ -292,8 +300,8 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T08: Critical action audit logging.
    * Expected: Valid append-only AUDIT.v1 event with exact fields.
    */
-  it("GT-T08: Critical action logs append-only AUDIT.v1 entry with exact schema fields", () => {
-    const entry = auditLogger.log(
+  it("GT-T08: Critical action logs append-only AUDIT.v1 entry with exact schema fields", async () => {
+    const entry = await auditLogger.log(
       "officer_32",
       "DELETE_GRAPH_NODE",
       "GRAPH",
@@ -317,11 +325,11 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
    * GT-T09: Complete case report generation.
    * Expected: REPORT.v1 containing all 11 required sections and evidence references.
    */
-  it("GT-T09: Complete case report contains all 11 required sections and evidence references", () => {
-    store.addEntity({ id: "P_10", type: "Person", case_id: "CASE-001" }, auth);
-    store.addEntity({ id: "P_20", type: "Phone", case_id: "CASE-001" }, auth);
+  it("GT-T09: Complete case report contains all 11 required sections and evidence references", async () => {
+    await store.addEntity({ id: "P_10", type: "Person", case_id: "CASE-001" }, auth);
+    await store.addEntity({ id: "P_20", type: "Phone", case_id: "CASE-001" }, auth);
 
-    store.addRelationship(
+    await store.addRelationship(
       {
         id: "R_100",
         source: "P_10",
@@ -353,7 +361,7 @@ describe("Developer 4 — Acceptance Tests (GT-T01 through GT-T09)", () => {
     ];
 
     const generator = new ReportGenerator(store, auditLogger);
-    const report = generator.generateReport({ case_summary: caseSummary, data_sources: dataSources }, auth);
+    const report = await generator.generateReport({ case_summary: caseSummary, data_sources: dataSources }, auth);
 
     expect(report.contract_version).toBe(CONTRACT_VERSION);
     expect(report.section_1_case_summary).toBeDefined();

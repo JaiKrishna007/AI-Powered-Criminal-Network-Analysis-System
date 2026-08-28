@@ -68,7 +68,7 @@ export class AnalyticsWorker {
 
     switch (type) {
       case "BRIDGE_DETECTION": {
-        const graph = this.store.getGraphForCase(case_id, auth);
+        const graph = await this.store.getGraphForCase(case_id, auth);
         return this.bridgeDetector.detectBridges(case_id, graph.nodes, graph.edges);
       }
 
@@ -76,14 +76,14 @@ export class AnalyticsWorker {
         if (!payload?.time1 || !payload?.time2) {
           throw new Error("Missing time1 or time2 for TEMPORAL_DIFF job");
         }
-        return this.temporalEngine.compareSnapshots(case_id, payload.time1, payload.time2);
+        return await this.temporalEngine.compareSnapshots(case_id, payload.time1, payload.time2);
       }
 
       case "REPORT_GEN": {
         if (!payload?.case_summary || !payload?.data_sources) {
           throw new Error("Missing case_summary or data_sources for REPORT_GEN job");
         }
-        return this.reportGenerator.generateReport(
+        return await this.reportGenerator.generateReport(
           {
             case_summary: payload.case_summary,
             data_sources: payload.data_sources,
@@ -94,7 +94,7 @@ export class AnalyticsWorker {
 
       case "FULL_ANALYTICS":
       default: {
-        const graph = this.store.getGraphForCase(case_id, auth);
+        const graph = await this.store.getGraphForCase(case_id, auth);
         const bridges = this.bridgeDetector.detectBridges(case_id, graph.nodes, graph.edges);
         return {
           graph,

@@ -1,6 +1,8 @@
 /**
- * GT-04 Community Detection
- * Identifies connected components / communities within an authorized case graph.
+ * GT-05 Community Detection
+ * Implements Connected-component based structural clustering.
+ * This is an MVP approximation of Louvain/Leiden modularity algorithms.
+ * Resolves undirected connected components using BFS/DFS.
  */
 
 import { ENTITY_v1, REL_v1 } from "../../contracts/types.js";

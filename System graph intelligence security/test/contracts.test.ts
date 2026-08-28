@@ -8,7 +8,6 @@ import {
   GRAPH_v1,
   AuthContext,
 } from "../lib/contracts/types.js";
-import { Neo4jGraphService } from "../lib/graph/neo4j.js";
 import { GraphStore } from "../lib/graph/store.js";
 import { AuditLogger } from "../lib/audit/audit_logger.js";
 
@@ -50,42 +49,6 @@ describe("PS26189-CONTRACT-v1 Contract Definitions", () => {
   });
 });
 
-describe("Neo4jGraphService Cypher Builders", () => {
-  const service = new Neo4jGraphService();
-
-  it("should build valid MERGE cypher for ENTITY.v1", () => {
-    const entity: ENTITY_v1 = {
-      id: "node_101",
-      type: "Person",
-      case_id: "CASE-001",
-      properties: { name: "Alice" },
-    };
-
-    const res = service.buildEntityCypher(entity);
-    expect(res.query).toContain("MERGE (n:Person {id: $props.id})");
-    expect(res.params.props.id).toBe("node_101");
-    expect(res.params.props.case_id).toBe("CASE-001");
-  });
-
-  it("should build valid MERGE cypher for REL.v1", () => {
-    const rel: REL_v1 = {
-      id: "edge_501",
-      source: "node_101",
-      target: "node_102",
-      type: "CALLED",
-      case_id: "CASE-001",
-      evidence_ids: ["EV-01"],
-    };
-
-    const res = service.buildRelCypher(rel);
-    expect(res.query).toContain("MATCH (source {id: $sourceId})");
-    expect(res.query).toContain("MATCH (target {id: $targetId})");
-    expect(res.query).toContain("MERGE (source)-[r:CALLED {id: $props.id}]->(target)");
-    expect(res.params.sourceId).toBe("node_101");
-    expect(res.params.targetId).toBe("node_102");
-  });
-});
-
 describe("GraphStore Operations and Security", () => {
   let store: GraphStore;
   let auditLogger: AuditLogger;
@@ -97,15 +60,15 @@ describe("GraphStore Operations and Security", () => {
 
   beforeEach(() => {
     auditLogger = new AuditLogger();
-    store = new GraphStore(auditLogger);
+    store = new GraphStore(auditLogger, undefined, true); // force InMemory for tests
   });
 
-  it("should add entities and relationships under valid auth", () => {
+  it("should add entities and relationships under valid auth", async () => {
     const p1: ENTITY_v1 = { id: "p1", type: "Person", case_id: "CASE-001" };
     const p2: ENTITY_v1 = { id: "p2", type: "Phone", case_id: "CASE-001" };
 
-    store.addEntity(p1, auth);
-    store.addEntity(p2, auth);
+    await store.addEntity(p1, auth);
+    await store.addEntity(p2, auth);
 
     const rel: REL_v1 = {
       id: "r1",
@@ -115,9 +78,9 @@ describe("GraphStore Operations and Security", () => {
       case_id: "CASE-001",
       evidence_ids: ["EV-100"],
     };
-    store.addRelationship(rel, auth);
+    await store.addRelationship(rel, auth);
 
-    const graph: GRAPH_v1 = store.getGraphForCase("CASE-001", auth);
+    const graph: GRAPH_v1 = await store.getGraphForCase("CASE-001", auth);
     expect(graph.nodes.length).toBe(2);
     expect(graph.edges.length).toBe(1);
     expect(graph.meta.truncated).toBe(false);
@@ -125,16 +88,16 @@ describe("GraphStore Operations and Security", () => {
     expect(graph.meta.edge_count).toBe(1);
   });
 
-  it("should deny access to unauthorized case_id and emit AUDIT.v1 event with DENIED outcome", () => {
+  it("should deny access to unauthorized case_id and emit AUDIT.v1 event with DENIED outcome", async () => {
     const unauthorizedAuth: AuthContext = {
       actor_id: "guest",
       correlation_id: "corr_000",
       allowed_case_ids: ["CASE-002"],
     };
 
-    expect(() => store.getGraphForCase("CASE-001", unauthorizedAuth)).toThrow();
+    await expect(store.getGraphForCase("CASE-001", unauthorizedAuth)).rejects.toThrow();
 
-    const auditLogs = auditLogger.getLogs();
+    const auditLogs = await auditLogger.getLogs();
     const deniedLog = auditLogs.find((l) => l.outcome === "DENIED");
     expect(deniedLog).toBeDefined();
     expect(deniedLog?.actor_id).toBe("guest");

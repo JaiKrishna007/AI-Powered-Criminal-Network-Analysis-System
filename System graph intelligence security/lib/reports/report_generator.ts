@@ -19,35 +19,43 @@ import { GraphStore } from "../graph/store.js";
 import { TemporalEngine } from "../graph/temporal.js";
 import { BridgeDetector } from "../graph/analytics/bridge.js";
 import { AuditLogger } from "../audit/audit_logger.js";
+import { ReportRepository } from "./repository.js";
+import { InMemoryReportRepository } from "./in_memory_repository.js";
 
 export interface ReportGenerationInput {
   case_summary: CASE_v1;
   data_sources: EVIDENCE_v1[];
   leads?: LEAD_v1[];
   max_nodes?: number;
+  report_version?: string; // e.g. "v1", "v2"
+  time_start?: string; // Optional period start for temporal diff
+  time_end?: string; // Optional period end for temporal diff
 }
 
 export class ReportGenerator {
   private temporalEngine: TemporalEngine;
   private bridgeDetector: BridgeDetector;
+  private reportRepository: ReportRepository;
 
   constructor(
     private store: GraphStore,
-    private auditLogger: AuditLogger = new AuditLogger()
+    private auditLogger: AuditLogger = new AuditLogger(),
+    reportRepository?: ReportRepository
   ) {
     this.temporalEngine = new TemporalEngine(store);
     this.bridgeDetector = new BridgeDetector();
+    this.reportRepository = reportRepository || new InMemoryReportRepository();
   }
 
-  public generateReport(
+  public async generateReport(
     input: ReportGenerationInput,
     auth: AuthContext
-  ): REPORT_v1 {
-    const { case_summary, data_sources, leads = [], max_nodes = 1000 } = input;
+  ): Promise<REPORT_v1> {
+    const { case_summary, data_sources, leads = [], max_nodes = 1000, report_version, time_start, time_end } = input;
     const caseId = case_summary.id;
 
     if (!auth.allowed_case_ids.includes(caseId)) {
-      this.auditLogger.log(
+      await this.auditLogger.log(
         auth.actor_id,
         "GENERATE_REPORT",
         "REPORT",
@@ -59,12 +67,17 @@ export class ReportGenerator {
       throw new Error(`Unauthorized access to case_id: ${caseId}`);
     }
 
-    const graph = this.store.getGraphForCase(caseId, auth, max_nodes);
+    const graph = await this.store.getGraphForCase(caseId, auth, max_nodes);
 
-    // Temporal findings
-    const allCaseEdges = this.store.getAllRelationshipsForCase(caseId);
+    // Temporal findings (Use actual Temporal Engine Diff if timestamps provided, else snapshot)
+    let temporalDiff: any = {};
+    if (time_start && time_end) {
+      temporalDiff = await this.temporalEngine.compareSnapshots(caseId, time_start, time_end);
+    }
+
+    const allCaseEdges = await this.store.getAllRelationshipsForCase(caseId, auth);
     const unknownTimestampsCount = allCaseEdges.filter(
-      (e) => !e.event_time && !e.effective_start
+      (e) => !e.event_time && !e.effective_start && !e.valid_from && !(e.properties && (e.properties.effective_start || e.properties.valid_from))
     ).length;
 
     // Bridge findings
@@ -74,17 +87,43 @@ export class ReportGenerator {
       graph.edges
     );
 
-    // Evidence references traceability
+    // XAI Explainable findings (Issue 18: Translate bridge insights into explicit XAI formats)
+    const explainableFindings: INSIGHT_v1[] = bridgeFindings.map(insight => {
+      const properties: any = (insight as any).properties || {};
+      
+      return {
+        ...insight,
+        title: `Explainability Details: ${insight.title}`,
+        description: `Reasoning: Node ${insight.target_entity_ids[0]} acts as an articulation point or strong bridge (Betweenness: ${properties.normalizedBetweenness?.toFixed(2) || 'N/A'}, Cross-community density: ${properties.crossCommunityDegree?.toFixed(2) || 'N/A'}). Temporal relevance: ${properties.temporalRelevance?.toFixed(2) || 'N/A'}.`,
+        // We include confidence, reasons, limitations inside properties
+        ...( { properties: {
+          confidence: properties.bridgeScore || 0,
+          limitations: "Algorithm uses MVP connected components. Cross-community density is an approximation.",
+          reasons: properties
+        } } as any )
+      };
+    });
+
+    // Evidence references traceability (Issue 19: Validated against data_sources)
+    const validDataSourceIds = new Set(data_sources.map(ds => ds.id));
+    
     const evidenceRefMap = new Map<
       string,
       { nodes: Set<string>; edges: Set<string> }
     >();
+    
     data_sources.forEach((ds) => {
       evidenceRefMap.set(ds.id, { nodes: new Set(), edges: new Set() });
     });
 
-    graph.edges.forEach((e) => {
-      (e.evidence_ids || []).forEach((evId) => {
+    for (const e of graph.edges) {
+      for (const evId of (e.evidence_ids || [])) {
+        // Validate evidence existence
+        if (!validDataSourceIds.has(evId)) {
+          await this.auditLogger.log(auth.actor_id, "VALIDATE_EVIDENCE", "EVIDENCE", evId, "ERROR", auth.correlation_id, { reason: "Evidence referenced in graph not found in data_sources", edge_id: e.id });
+          continue;
+        }
+
         if (!evidenceRefMap.has(evId)) {
           evidenceRefMap.set(evId, { nodes: new Set(), edges: new Set() });
         }
@@ -92,8 +131,8 @@ export class ReportGenerator {
         ref.edges.add(e.id);
         ref.nodes.add(e.source);
         ref.nodes.add(e.target);
-      });
-    });
+      }
+    }
 
     const evidenceReferences = Array.from(evidenceRefMap.entries()).map(
       ([evId, ref]) => ({
@@ -103,7 +142,7 @@ export class ReportGenerator {
       })
     );
 
-    const auditEvents = Array.from(this.auditLogger.getLogs());
+    const auditEvents = Array.from(await this.auditLogger.getLogs());
 
     const report: REPORT_v1 = {
       id: `report_${caseId}_${Date.now()}`,
@@ -117,12 +156,17 @@ export class ReportGenerator {
       section_3_key_entities: graph.nodes,
       section_4_relationships: graph.edges,
       section_5_temporal_findings: {
+        period_start: time_start,
+        period_end: time_end,
         snapshot_at: new Date().toISOString(),
-        timeline_events: graph.edges.filter((e) => !!e.event_time),
+        diff_added: temporalDiff.added,
+        diff_removed: temporalDiff.removed,
+        diff_changed: temporalDiff.changed,
+        timeline_events: graph.edges.filter((e) => !!e.event_time || !!e.effective_start || !!e.valid_from),
         unknown_timestamps_count: unknownTimestampsCount,
       },
       section_6_bridge_findings: bridgeFindings,
-      section_7_explainable_findings: bridgeFindings, // Deterministic explainable findings
+      section_7_explainable_findings: explainableFindings,
       section_8_evidence_references: evidenceReferences,
       section_9_leads: leads,
       section_10_limitations: {
@@ -132,12 +176,14 @@ export class ReportGenerator {
           "This report presents structural and temporal graph relationships. No legal or criminal culpability is inferred.",
       },
       section_11_version_audit: {
-        report_version: "1.0.0",
+        report_version: report_version || `1.0.${Math.floor(Date.now() / 1000)}`,
         audit_events: auditEvents,
       },
     };
 
-    this.auditLogger.log(
+    await this.reportRepository.save(report);
+
+    await this.auditLogger.log(
       auth.actor_id,
       "GENERATE_REPORT",
       "REPORT",
