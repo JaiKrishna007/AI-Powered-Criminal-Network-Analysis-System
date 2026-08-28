@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ServiceErrors, handleServiceError } from '../errors/service_errors';
 import { AuthContext } from './ai_client';
 
-const D4_URL = process.env.D4_SERVICE_URL || 'http://localhost:3004';
+const getD4Url = () => process.env.D4_SERVICE_URL || 'http://localhost:8003';
 
 const GraphResponseSchema = z.object({
   nodes: z.array(z.any()),
@@ -38,7 +38,7 @@ export class GraphClient {
         headers['X-Correlation-ID'] = context.correlation_id;
       }
 
-      const response = await fetch(`${D4_URL}${endpoint}`, {
+      const response = await fetch(`${getD4Url()}${endpoint}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ context, ...payload }),

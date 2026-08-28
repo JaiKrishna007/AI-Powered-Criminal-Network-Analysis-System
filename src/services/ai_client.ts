@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ServiceErrors, handleServiceError } from '../errors/service_errors';
 
-const D3_URL = process.env.D3_SERVICE_URL || 'http://localhost:3003';
+const getD3Url = () => process.env.D3_SERVICE_URL || 'http://localhost:8002';
 
 export interface AuthContext {
   user_id: string;
@@ -53,7 +53,7 @@ export class AIClient {
         headers['X-Correlation-ID'] = context.correlation_id;
       }
 
-      const response = await fetch(`${D3_URL}${endpoint}`, {
+      const response = await fetch(`${getD3Url()}${endpoint}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ context, ...payload }),

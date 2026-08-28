@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ServiceErrors, handleServiceError } from '../errors/service_errors';
 import { MLResponseSchema, AnomalyResponseSchema } from '../contracts';
 
-const ML_URL = process.env.ML_SERVICE_URL || 'http://localhost:3005';
+const getMLUrl = () => process.env.ML_SERVICE_URL || 'http://localhost:8001';
 
 export class MLClient {
   static async fetchML(endpoint: string, payload: any, timeoutMs: number = 10000) {
@@ -18,7 +18,7 @@ export class MLClient {
         headers['X-Correlation-ID'] = payload.correlation_id;
       }
 
-      const response = await fetch(`${ML_URL}${endpoint}`, {
+      const response = await fetch(`${getMLUrl()}${endpoint}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),

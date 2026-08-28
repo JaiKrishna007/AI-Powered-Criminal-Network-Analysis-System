@@ -19,6 +19,8 @@ export interface AuthorizeCaseOptions {
 }
 
 export class AuthMiddleware {
+  public static readonly requireAuth = (req: AuthenticatedRequest, res: Response, next: NextFunction) => AuthMiddleware.authenticate(req, res, next);
+
   /**
    * Resolves authentication context from the secure session.
    */

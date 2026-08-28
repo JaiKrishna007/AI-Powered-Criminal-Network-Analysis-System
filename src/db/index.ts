@@ -117,8 +117,15 @@ export class ControlPlaneDB {
 
   private async seedUsers() {
     if (!this.db) return;
+    
+    // In strict production mode, avoid automatically seeding default demo credentials unless requested
+    if (process.env.NODE_ENV === 'production' && !process.env.DEMO_PASSWORD && !process.env.ADMIN_INITIAL_PASSWORD) {
+      console.info('Production mode active: Automated demo user seeding omitted.');
+      return;
+    }
+
     const bcrypt = require('bcrypt');
-    const defaultPassword = process.env.DEMO_PASSWORD || 'password123';
+    const defaultPassword = process.env.DEMO_PASSWORD || process.env.ADMIN_INITIAL_PASSWORD || 'demo_password123_sih_only';
     const hash = await bcrypt.hash(defaultPassword, 10);
 
     const demoUsers = [
