@@ -11,11 +11,7 @@ export interface AuthContext {
   correlation_id?: string;
 }
 
-const AIResponseSchema = z.object({
-  status: z.string(),
-  results: z.array(z.any()).optional(),
-  data: z.any().optional(),
-}).passthrough();
+import { AIResponseSchema } from '../contracts';
 
 const CopilotResponseSchema = z.object({
   status: z.string(),

@@ -4,14 +4,7 @@ import { AuthContext } from './ai_client';
 
 const getD4Url = () => process.env.D4_SERVICE_URL || 'http://localhost:8003';
 
-const GraphResponseSchema = z.object({
-  nodes: z.array(z.any()),
-  edges: z.array(z.any())
-}).passthrough();
-
-const InsightResponseSchema = z.object({
-  insights: z.array(z.any())
-}).passthrough();
+import { GraphResponseSchema, BridgeAnalysisResponseSchema, TemporalAnalysisResponseSchema } from '../contracts';
 
 import { signAuthContext } from '../utils/security';
 
@@ -82,11 +75,11 @@ export class GraphClient {
   }
 
   static async getBridgeAnalysis(context: AuthContext) {
-    return await this.fetchD4('/analytics/bridge', context, {}, 15000, InsightResponseSchema);
+    return await this.fetchD4('/analytics/bridge', context, {}, 15000, BridgeAnalysisResponseSchema);
   }
 
   static async getTemporalAnalysis(context: AuthContext, timeRange: any) {
-    return await this.fetchD4('/analytics/temporal', context, { timeRange }, 15000, InsightResponseSchema);
+    return await this.fetchD4('/analytics/temporal', context, { timeRange }, 15000, TemporalAnalysisResponseSchema);
   }
 
   static async getRelationshipPath(context: AuthContext, sourceId: string, targetId: string) {

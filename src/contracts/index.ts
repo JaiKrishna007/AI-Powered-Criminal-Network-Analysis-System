@@ -8,13 +8,14 @@ export const RelationshipIdSchema = z.string().regex(/^REL-.*$/);
 export const InsightIdSchema = z.string().regex(/^INS-.*$/);
 export const JobIdSchema = z.string().regex(/^JOB-.*$/);
 export const CandidateIdSchema = z.string().regex(/^CAND-.*$/);
+export const EntityIdSchema = z.string().regex(/^ENT-.*$/);
 
 // Timestamp strict UTC ISO-8601
 export const TimestampSchema = z.string().datetime();
 
 // --- 1. ENTITY.v1 ---
 export const EntitySchema = z.object({
-  id: z.string(),
+  id: EntityIdSchema,
   name: z.string(),
   type: z.string(),
   identifiers: z.record(z.string(), z.string()).optional(),
@@ -68,13 +69,16 @@ export type EvidenceV1 = z.infer<typeof EvidenceSchema>;
 
 // --- 4. INSIGHT.v1 ---
 export const InsightSchema = z.object({
-  id: InsightIdSchema,
-  case_id: CaseIdSchema,
-  type: z.enum(['ANOMALY', 'PATTERN', 'PREDICTION', 'SUMMARY']),
-  content: z.string(),
-  confidence: z.number().min(0).max(1),
+  id: InsightIdSchema.optional(),
+  case_id: CaseIdSchema.optional(),
+  type: z.string(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  description: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  supporting_entities: z.array(z.string()).optional(),
   supporting_evidence: z.array(EvidenceIdSchema).optional(),
-  created_at: TimestampSchema
+  created_at: TimestampSchema.optional()
 });
 
 export type InsightV1 = z.infer<typeof InsightSchema>;
@@ -150,14 +154,38 @@ export const MLResponseSchema = z.object({
   }).optional()
 });
 
+export const GraphNodeSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  type: z.string().optional(),
+  properties: z.record(z.string(), z.any()).optional()
+});
+
+export const GraphEdgeSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  type: z.string(),
+  weight: z.number().optional(),
+  properties: z.record(z.string(), z.any()).optional()
+});
+
 export const GraphResponseSchema = z.object({
-  nodes: z.array(z.any()),
-  edges: z.array(z.any())
+  nodes: z.array(GraphNodeSchema),
+  edges: z.array(GraphEdgeSchema)
+});
+
+export const AISearchResultSchema = z.object({
+  id: z.string(),
+  evidence_id: z.string().optional(),
+  score: z.number().optional(),
+  snippet: z.string().optional(),
+  source: z.string().optional()
 });
 
 export const AIResponseSchema = z.object({
-  results: z.array(z.any()),
-  insights: z.array(z.any()).optional()
+  status: z.string().optional(),
+  results: z.array(AISearchResultSchema),
+  insights: z.array(InsightSchema).optional()
 });
 
 export const AnomalyResponseSchema = z.object({
@@ -166,12 +194,22 @@ export const AnomalyResponseSchema = z.object({
   explanation: z.string().optional()
 });
 
-export const RelationshipResponseSchema = z.object({
-  id: RelationshipIdSchema,
-  source_id: z.string(),
-  target_id: z.string(),
-  type: z.string(),
-  weight: z.number().optional()
+// Reuse RelationshipSchema for relationship responses (Issue 44)
+export const RelationshipResponseSchema = RelationshipSchema;
+
+export const TemporalAnalysisResponseSchema = z.object({
+  insights: z.array(InsightSchema).optional(),
+  summary: z.string().optional()
+});
+
+export const BridgeAnalysisResponseSchema = z.object({
+  insights: z.array(InsightSchema).optional(),
+  key_bridges: z.array(
+    z.object({
+      entity_id: z.string(),
+      betweenness_score: z.number()
+    })
+  ).optional()
 });
 
 // --- 7. ENTITY_RESOLUTION.v1 ---

@@ -12,6 +12,7 @@
     "mock:d3": "node dist/mock_services/server.js d3",
     "mock:d4": "node dist/mock_services/server.js d4",
     "mock:all": "node dist/mock_services/server.js all",
+    "seed:demo": "ts-node -P tsconfig.backend.json src/scripts/seed_demo.ts",
     "test": "vitest run"
   },
   "dependencies": {
