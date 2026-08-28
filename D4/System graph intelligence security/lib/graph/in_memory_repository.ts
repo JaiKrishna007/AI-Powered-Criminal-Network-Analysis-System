@@ -92,12 +92,11 @@ export class InMemoryGraphRepository implements GraphRepository {
         id: rel.source,
         type: 'UNKNOWN',
         case_id: rel.case_id,
-        name: 'Placeholder',
-        properties: {},
+        properties: { name: 'Placeholder' },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      };
-      this.nodes.set(rel.source, sourceNode);
+      } as any;
+      this.nodes.set(rel.source, sourceNode as any);
     }
 
     let targetNode = this.nodes.get(rel.target);
@@ -106,15 +105,14 @@ export class InMemoryGraphRepository implements GraphRepository {
         id: rel.target,
         type: 'UNKNOWN',
         case_id: rel.case_id,
-        name: 'Placeholder',
-        properties: {},
+        properties: { name: 'Placeholder' },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      };
-      this.nodes.set(rel.target, targetNode);
+      } as any;
+      this.nodes.set(rel.target, targetNode as any);
     }
 
-    if (sourceNode.case_id !== rel.case_id || targetNode.case_id !== rel.case_id) {
+    if (sourceNode!.case_id !== rel.case_id || targetNode!.case_id !== rel.case_id) {
       await this.auditLogger.log(
         auth.actor_id,
         "ADD_RELATIONSHIP",
